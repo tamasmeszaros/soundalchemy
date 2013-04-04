@@ -15,9 +15,11 @@
 
 #include "predef.h"
 #include "llaaudiobuffer.h"
+#include "lladevice.h"
 
 // TODO replace this with a generic llaFile interface to not depend on this
 #include <cstdio>
+#include <string>
 
 namespace llaudio {
 
@@ -28,12 +30,17 @@ namespace llaudio {
  * implementation of the engine (e.g. ALSA).
  */
 class llaStream {
+	llaDevice* owner_;
+
+
 protected:
 
 	/// Sample format type shortcut
 	typedef llaAudioBuffer::TSampleFormat TSampleFormat;
 
 public:
+
+	llaStream():owner_(&LLA_NULL_DEVICE) {}
 
 	/**
 	 * Opens the stream and initializes it.
@@ -126,10 +133,18 @@ public:
 		return E_UNIMPLEMENTED;
 	}
 
+	virtual bool isNull(void) { return false; }
+
+
 	/// Default destructor. Does nothing.
 	virtual ~llaStream() {}
 
+	llaDevice& getOwner(void) { return *owner_; }
+
 protected:
+
+	void setOwner(llaDevice& owner) { owner_ = &owner; }
+	friend class llaDriver;
 
 	////////////////////////////////////////////////////////////////////////////
 	/// Functions for manipulating an llaAudioBuffer object's private properties
@@ -278,7 +293,7 @@ protected:
 	typedef FILE* llaFile;
 
 	llaFile file_;
-	const char* filename_;
+	std::string filename_;
 	long int data_begin_;
 
 };
@@ -299,6 +314,12 @@ class llaNullStream: public llaInputStream, public llaOutputStream {
 
 	TErrors write(llaAudioBuffer& buffer) { return E_OK;}
 	TErrors read(llaAudioBuffer& buffer) { return E_OK; }
+
+	TErrors connect( llaOutputStream* output, llaAudioBuffer& buffer) {
+		return E_STREAM_INCOMPATIBLE;
+	}
+
+	bool isNull(void) { return true; }
 };
 
 }

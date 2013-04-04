@@ -17,7 +17,8 @@
 #include <map>
 #include <list>
 #include <string>
-#include <jsoncpp/json/json.h>
+#include <cstdio>
+#include <json/json.h>
 
 namespace soundalchemy {
 
@@ -34,6 +35,10 @@ class DspServer;
 class Message {
 protected:
 
+	// TODO replace with an abstract class which inherits Json::Value.
+	// This is a  general purpose data store for message data.
+	typedef Json::Value MsgDataStore;
+
 	/**
 	 * Each message type has a named constant identifier. It stands for a
 	 * specific command to the server. The parameters of each operation are
@@ -49,12 +54,15 @@ protected:
 		MSG_GET_DEVICE_LIST,    //!< Obtain information about sound devices
 		MSG_SET_INPUT_STREAM,   //!< Set the audio input for processing
 		MSG_SET_OUTPUT_STREAM,  //!< Set the audio output for processing
+		MSG_GET_INPUT_STREAM,
+		MSG_GET_OUTPUT_STREAM,
 		MSG_GET_EFFECT_DATABASE,//!< Get the database of available effects
 		MSG_ADD_EFFECT,		    //!< Add an effect to the signal chain
 		MSG_REMOVE_EFFECT,      //!< Remove an effect from the signal chain
 		MSG_SET_EFFECT_PARAM,   //!< Set a parameter of a specific effect
 		MSG_GET_EFFECT_PARAM,	//!< Get a parameter of a specific effect
 		MSG_GET_STATE,          //!< Obtain the processing state
+		MSG_SEND_CLIENT_ID,     //!< Sending a channelID to a new client
 	} TMessageType;
 
 public:
@@ -62,14 +70,8 @@ public:
 	/**
 	 * ID of the front-end sending the message
 	 */
-	typedef enum e_source {
-
-		ALCHEMY_SERVER = 0, //!< ALCHEMY_SERVER
-		CLIENT_ANDROID = 1, //!< CLIENT_ANDROID
-		CLIENT_TERMINAL = 2,//!< CLIENT_TERMINAL
-		CLIENT_MIDI = 1,    //!< CLIENT_MIDI
-		//.. other clients
-	} TChannelID;
+	typedef unsigned int TChannelID;
+	static const TChannelID ALCHEMY_SERVER;
 
 private:
 	TChannelID channel_;
@@ -90,7 +92,7 @@ public:
 	 * @param channel An optional ID of the sender front-end. If points to
 	 * Alchemy Server if omitted.
 	 */
-	Message(TChannelID channel = ALCHEMY_SERVER):channel_(channel) {}
+	Message():channel_(ALCHEMY_SERVER) {}
 	virtual ~Message() {}
 
 	/**
@@ -103,7 +105,7 @@ public:
 	 * @brief Get the ID of the sender front-end.
 	 * @param channel
 	 */
-	void setChannelId(TChannelID channel) { channel_ = channel; }
+	virtual void setChannelId(TChannelID channel) { channel_ = channel; }
 
 };
 
@@ -111,28 +113,50 @@ public:
  * @brief Base class for an outgoing message.
  */
 class OutboundMessage: public Message {
-	Json::Value jsonroot_;
-	std::ostream *ostream_;
-
 protected:
-	TMessageType sender_;
-	void setOutputStream(std::ostream* s) { delete ostream_; ostream_ = s; }
+	TMessageType ack_for_;
+	MsgDataStore dataroot_;
 
 public:
 
-	virtual ~OutboundMessage() { delete ostream_; }
+	/// initializers
+	static OutboundMessage* MsgSendClientID( TChannelID id );
+	static OutboundMessage* AckStart( const char* error);
+	static OutboundMessage* AckStop( const char* error );
+	static OutboundMessage* AckExit( void );
+	static OutboundMessage* AckGetInputStream(const char* device_name, int id);
+	static OutboundMessage* AckSetInputStream(const char* error);
+
+
+	virtual ~OutboundMessage() {}
 
 	/**
 	 * @brief Convert the message to a serialized byte stream.
+	 *
+	 * The message is converted to a byte stream conforming to the parameter
+	 * protocol and the stream is written to the given output stream.
+	 *
 	 * @param protocol Specifies the protocol of the byte stream
-	 * @return Returns a std::ostream object
+	 * @param output An output stream where the raw message will be sent
+	 * @param delimiter Specifies the delimiter character after the byte stream
 	 */
-	virtual std::ostream* serialize(TProtocol protocol);
+	virtual void serialize(TProtocol protocol, std::ostream& output,
+			int delimiter = EOF);
 
-	bool isExitMessage(void) { return sender_ == MSG_EXIT; }
+	virtual void setChannelId(TChannelID chid) {
+		Message::setChannelId(chid);
+		dataroot_["channelID"] = getChannelId();
+	}
 
 protected:
-	OutboundMessage(TMessageType sender):sender_(sender) { ostream_ = NULL};
+
+	OutboundMessage(TMessageType reply_for):
+			ack_for_(reply_for) {
+		dataroot_["type"] = MSG_ACK;
+		dataroot_["channelID"] = getChannelId();
+		dataroot_["ack_for"] = reply_for;
+	}
+
 };
 
 /**
@@ -145,6 +169,7 @@ protected:
 
 public:
 	InboundMessage() { reply_ = NULL; }
+
 	virtual ~InboundMessage() { delete reply_; }
 
 	/**
@@ -171,7 +196,11 @@ public:
 	 * @param stream An input stream object from the standard C++ library
 	 * @return Returns a subclass of InboundMessage
 	 */
-	static InboundMessage* unserialize(TProtocol protocol, std::istream& stream);
+	static InboundMessage* unserialize(TProtocol protocol,
+			std::istream& stream, int delimiter = EOF);
+
+
+	virtual bool isExitMessage(void) { return false; }
 };
 
 ////////////////////////////////////////////////////////////////////////////////
@@ -184,35 +213,15 @@ public:
 //
 
 /**
- * @brief Outgoing MSG_START message
- */
-class AckStart: public OutboundMessage {
-	std::string errormsg_;
-public:
-	AckStart():OutboundMessage(MSG_START) {}
-	void setErrorMsg(const char* errormsg) { errormsg_ = errormsg; }
-};
-
-/**
  * @brief Incoming MSG_START message
  */
 class MsgStart: public InboundMessage {
 public:
-	OutboundMessage* instruct(DspServer& server);
+	virtual OutboundMessage* instruct(DspServer& server);
 };
 
 // MSG_STOP ////////////////////////////////////////////////////////////////////
 //
-
-/**
- * @brief Outgoing MSG_STOP message
- */
-class AckStop: public OutboundMessage {
-	std::string errormsg_;
-public:
-	AckStop():OutboundMessage(MSG_STOP) {}
-	void setErrorMsg(const char* errormsg) { errormsg_ = errormsg; }
-};
 
 /**
  * @brief Incoming MSG_STOP message
@@ -232,6 +241,8 @@ public:
 class MsgExit: public InboundMessage {
 public:
 	OutboundMessage* instruct(DspServer& server);
+
+	bool isExitMessage(void) { return true; }
 };
 
 // MSG_GET_DEVICE_LIST /////////////////////////////////////////////////////////
@@ -252,16 +263,16 @@ class AudioInf {
 	struct StreamInf {
 		std::string name_;
 		int id_;
-	public:
 		StreamInf(const char* name, int id):name_(name), id_(id) {}
 	};
 
 	class DeviceInf {
+	public:
 		std::list<StreamInf> istreaminf_;
 		std::list<StreamInf> ostreaminf_;
 		std::string name_;
 		std::string fullname_;
-	public:
+
 		DeviceInf(const char* name, const char* fullname):name_(name),
 			fullname_(fullname) {}
 
@@ -302,6 +313,8 @@ public:
 	virtual void stream(int id, const char* name, bool input) {
 		current_->addStream(StreamInf( name, id), input);
 	}
+
+	DeviceInf& getCurrent(void) { return *current_; }
 
 	/**
 	 *
@@ -345,9 +358,10 @@ public:
 /**
  * @brief Outgoing MSG_GET_DEVICE_LIST message
  */
-class AckDeviceList: public OutboundMessage, public AudioInf {
+class OutboundMsgDeviceList: public OutboundMessage, public AudioInf {
+	MsgDataStore current_device_;
 public:
-	AckDeviceList():OutboundMessage(MSG_GET_DEVICE_LIST) {}
+	OutboundMsgDeviceList(): OutboundMessage(MSG_GET_DEVICE_LIST) {}
 
 	virtual void beginDevice(const char* name, const char* fullname);
 
@@ -355,26 +369,46 @@ public:
 
 	virtual void endDevice();
 
-	virtual DeviceInf& operator->(void);
-
-	virtual DeviceInf& operator*(void);
-
-	virtual AudioInf& operator++(int);
-
-	/// operators
-	virtual AudioInf& operator++(void);
-	virtual bool end(void);
-	virtual bool empty(void);
-	virtual void begin(void);
-
 };
 
 /**
  * @brief Incoming MSG_GET_DEVICE_LIST message
  */
 class MsgDeviceList: public InboundMessage {
-
 public:
+	OutboundMessage* instruct(DspServer& server);
+};
+
+// MSG_SEND_CLIENT_ID //////////////////////////////////////////////////////////
+
+class MsgClientID: public OutboundMessage {
+	TChannelID new_client_;
+public:
+	MsgClientID(TChannelID new_client):
+		OutboundMessage(MSG_UNINITIALIZED),
+		new_client_(new_client) {
+		dataroot_["clientID"] = (TChannelID) new_client_;
+	}
+};
+
+// MSG_SET_INPUT_STREAM ////////////////////////////////////////////////////////
+//
+
+class MsgGetInputStream: public InboundMessage {
+public:
+	OutboundMessage* instruct(DspServer& server);
+};
+
+// MSG_SET_INPUT_STREAM ////////////////////////////////////////////////////////
+//
+
+class MsgSetInputStream: public InboundMessage {
+	std::string device_name_;
+	int id_;
+public:
+	MsgSetInputStream(const char* device_name, int id):
+		device_name_(device_name), id_(id) {}
+
 	OutboundMessage* instruct(DspServer& server);
 };
 

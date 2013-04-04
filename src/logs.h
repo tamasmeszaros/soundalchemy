@@ -52,13 +52,11 @@ typedef enum e_errors
 	E_OK,
 	E_START,
 	E_START_LISTENER,
-	E_ALLOC,
 	E_READ,
 	E_QUEUE,
-	E_DEMONIZE,
 	E_AUDIO,
-	E_PROCESS_INSTRUCTION,
 	E_INDEX,
+	E_SET_STREAM,
 	NUMERR,
 } TAlchemyError;
 
@@ -66,13 +64,11 @@ const char *const STR_ERRORS[NUMERR] = {
 		"",
 		"Cannot start the processing thread",
 		"Cannot start the specified client listener",
-		"Memory allocation failed",
 		"Cannot read from the specified control input",
 		"A message buffering error occurred",
-		"Cannot start the program in the background (demonize)",
 		"Cannot start the audio pipeline",
-		"Cannot process instruction in time",
 		"Index out of range or no such key exists",
+		"Cannot set the specified input or output stream"
 };
 
 

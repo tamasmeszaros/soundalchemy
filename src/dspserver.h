@@ -51,17 +51,6 @@ public:
 	} TState;
 
 	/**
-	 * Clients can be connected to the process and the types of clients
-	 * supported are listed here
-	 */
-	typedef enum e_clients
-	{
-		CLIENT_COMMAND_PROMPT,//!< a command line client connector
-		CLIENT_MIDI,          //!< a MIDI controller handler
-		CLIENT_OTHER          //!< CLIENT_OTHER
-	} TClients;
-
-	/**
 	 * default constructor and destructor
 	 */
 	DspServer();
@@ -80,6 +69,18 @@ public:
 
 	void getDeviceList(AudioInf& devicelist);
 
+	TAlchemyError setInputStream(TDeviceId device, TStreamId id);
+
+	TAlchemyError setOutputStream(TDeviceId device, TStreamId id);
+
+	llaInputStream& getInputStream(void) { return proc_graph_.getInput(); }
+
+	llaOutputStream& getOutputStream(void) {  return proc_graph_.getOutput(); }
+
+	void setBufferSize(TSize buffer_size);
+
+	void setSampleRate(TSampleRate sample_rate);
+
 
 	void addEffect(SoundEffect* effect);
 
@@ -87,23 +88,13 @@ public:
 	 * Starts the command line listener.
 	 * @return Returns an an error code defined in enum e_errors
 	 */
-	TAlchemyError listenOnCliPrompt(void);
+	TAlchemyError listenOn(ClientConnector& client);
 
 	/**
-	 * Starts the MIDI listener. MIDI controller support is not implemented yet.
-	 * @param interface
-	 * @return Returns an an error code defined in enum e_errors
+	 * This function can be called by a client connector to stop the whole
+	 * service.
 	 */
-	TAlchemyError listenOnMidi(const char* interface);
-	//enum e_errors listenOnSocket();
-
-	/**
-	 * Enables the android GUI support trough the stdin and stdout stream as
-	 * the communication channel. IPC is problematic with the dalvik VM with
-	 * classic POSIX facilities.
-	 * @return Returns an an error code defined in enum e_errors
-	 */
-	TAlchemyError listenOnAndroidGUI(void);
+	void stopListening(void);
 
 	/**
 	 * Starts the handling of user inputs from the various client connectors.
@@ -111,12 +102,6 @@ public:
 	 * allocated. Normally at the end of main.
 	 */
 	void startListening(void);
-
-	/**
-	 * This function can be called by a client connector to stop the whole
-	 * service.
-	 */
-	void stopListening(void) { exit_ = true; }
 
 	/**
 	 * This method is for client connectors for sending messages (instructions)
@@ -127,12 +112,6 @@ public:
 
 
 private:
-
-//	static Message* ACK_START(TChannelID chid, TAlchemyString error = "" );
-//	static Message* ACK_STOP(TChannelID chid, TAlchemyString error = "");
-//	static Message* ACK_GET_DEVICE_LIST( TChannelID chid, llaDeviceIterator& devices);
-//	static Message* ACK_SET_INPUT_STREAM( TChannelID chid, TAlchemyString error);
-//	static Message* ACK_SET_OUTPUT_STREAM( TChannelID chid, TAlchemyString error);
 
 	/**
 	 * Sending a message or reply to all the client connectors
@@ -168,11 +147,11 @@ private:
 
 		class State: public ConditionVariable {
 		public:
-			sig_atomic_t val;
+			TState val;
+			TState state_requested_;
 			bool isTrue(void) { return val == ST_STOPPED; }
 		} state_;
 
-		volatile sig_atomic_t state_requested_;
 		unsigned int callback_counter_;
 
 		//Mutex *proc_mutex_;
@@ -181,26 +160,52 @@ private:
 
 	} dsp_process_;
 
-	class EffectNode {
+	class Input: public MixerEffect {
 	public:
-		SoundEffect* effect;
-		EffectNode * next;
-		EffectNode(): effect(NULL), next(NULL){}
-	};
-
-	class Input: public EffectNode {
-	public:
-		Input(): llainput(LLA_NULL_STREAM) { effect = new MixerEffect(1,1); }
+		Input():MixerEffect(1,1), llainput(lla_devman_.getDefaultDevice().getInputStream()) { }
 
 		llaInputStream& llainput;
-	}audio_input_;
+	};
 
-	class Output: public EffectNode {
+	class Output: public MixerEffect {
 	public:
-		Output(): llaoutput(LLA_NULL_STREAM) { effect = new MixerEffect(1,2); }
+		Output(): MixerEffect(1,2), llaoutput(lla_devman_.getDefaultDevice().getOutputStream()) { }
 
 		llaOutputStream& llaoutput;
-	}audio_output_;
+	};
+
+	class ProcessingGraph {
+		typedef std::vector<SoundEffect*> TEffectStack;
+		typedef TEffectStack::iterator TEffectStackIt;
+
+		TEffectStack effectlist_;
+		Mutex *mutex_;
+		Input input_;
+		Output output_;
+	public:
+
+		ProcessingGraph():mutex_(Thread::getMutex()){}
+		~ProcessingGraph() { delete mutex_; }
+
+		void setInput(llaInputStream& input) { input_.llainput = input; }
+		void setOutput(llaOutputStream& output) { output_.llaoutput = output; }
+
+		llaInputStream& getInput(void) { return input_.llainput; }
+		llaOutputStream& getOutput(void) { return output_.llaoutput; }
+
+		void traverse(unsigned int sample_count) {
+			mutex_->lock();
+			input_.process(sample_count);
+			for(TEffectStackIt it = effectlist_.begin();
+					it != effectlist_.end(); it++ ) {
+				(*it)->process(sample_count);
+			}
+			output_.process(sample_count);
+			mutex_->unlock();
+		}
+
+		void addEffect(SoundEffect* effect);
+	} proc_graph_;
 
 
 	/**
@@ -256,22 +261,24 @@ private:
 
 			TMessageQueue queue_base_;
 		}cond_var_;
+
+		bool enabled_;
 	};
 
 	Thread *this_thread_;
 
 	// Objects for connecting different front-ends
 	ClientConnector* clients_[CLIENTS_MAX];
+	unsigned int clients_count_;
 
 	// A facility for communication between the UI and the server
-	MessageQueue messagequeue_;
+	MessageQueue *messagequeue_;
 
 	// The audio interface manager
-	llaDeviceManager& lla_devman_;
+	static llaDeviceManager& lla_devman_;
 
 	// the unique name of the sound device used for processing
 	const char* device_name_;
-	bool remote_;
 	bool exit_;
 
 };

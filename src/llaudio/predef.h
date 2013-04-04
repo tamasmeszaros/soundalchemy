@@ -145,5 +145,7 @@ extern llaNullStream LLA_NULL_STREAM;
 	 eh.setAdditionals(__FILE__, __LINE__); \
 	} llaDeviceManager::getErrorHandler()
 
+
 }
+
 #endif /* LLAUDIO_PREDEF_H_ */

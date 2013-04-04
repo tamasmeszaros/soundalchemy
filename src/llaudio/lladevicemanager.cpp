@@ -28,7 +28,6 @@ bool llaudio::isBigEndianArch(void) {
 	return bint.c[0] == 1;
 }
 
-
 /* *****************************************************************************
  * llaDeviceManager class implementation:
  */
@@ -195,5 +194,6 @@ llaFileStream& llaDeviceManager::getFileStream(const char* file) {
 
 	return *s;
 }
+
 
 

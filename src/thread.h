@@ -76,7 +76,7 @@ public:
 
 	void* getReturnValue(void) { return returnval_; }
 
-	static Thread * getCurrent(void);
+	static Thread* getCurrent(void);
 	static Thread * getNewThread(void);
 	static Mutex * getMutex(int threads = 1);
 

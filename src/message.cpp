@@ -13,66 +13,27 @@
 
 
 #include "message.h"
+#include "logs.h"
+#include "dspserver.h"
 #include <cstdlib>
+#include <json/json.h>
 
 using namespace std;
-using namespace Json;
 
 
 namespace soundalchemy {
 
+const Message::TChannelID Message::ALCHEMY_SERVER = 0;
 
+void soundalchemy::OutboundMessage::serialize(TProtocol protocol,
+		std::ostream& output, int delimiter) {
 
-
-
-//InboundMessage* soundalchemy::InboundMessage::fromJSON(JSONNode json_msg) {
-//	JSONNode::const_iterator i = json_msg.begin();
-//
-//	TMessageType msgtype = MSG_UNINITIALIZED;
-//	InboundMessage* msg;
-//
-//	try {
-//		msgtype = (TMessageType) json_msg.at("type").as_int();
-//		switch(msgtype) {
-//		case MSG_START:
-//		  {
-//			MsgStart*  m = new MsgStart(json_msg.at("channelID").as_int());
-//			msg = m;
-//		  }
-//		  break;
-//		case MSG_STOP:
-//		  {
-//			MsgStop*  m = new MsgStop(json_msg.at("channelID").as_int());
-//			msg = m;
-//		  }
-//		  break;
-//		case MSG_GET_DEVICE_LIST:
-//		  {
-//			MsgDeviceList* m = new MsgDeviceList(json_msg.at("channelID").as_int());
-//			msg = m;
-//		  }
-//		  break;
-//		default:
-//			msg = NULL;
-//			break;
-//		}
-//
-//	} catch(out_of_range& e) {
-//		log(LEVEL_ERROR, e.what());
-//	}
-
-//	return msg;
-
-//}
-
-std::ostream* soundalchemy::OutboundMessage::serialize(TProtocol protocol) {
-
-	switch(protocol) {
+	switch(protocol) { // decide which protocol to use
 	case PROTOCOL_JSON: {
-		ostream *stream = new ostream;
-		setOutputStream(stream);
 
-
+		// send out the JSON data
+		output << Json::FastWriter().write(dataroot_) << (char) delimiter;
+		output.flush();
 	}
 	break;
 	default:
@@ -81,73 +42,168 @@ std::ostream* soundalchemy::OutboundMessage::serialize(TProtocol protocol) {
 		break;
 	}
 
-	return NULL;
 }
 
 InboundMessage* soundalchemy::InboundMessage::unserialize(TProtocol protocol,
-		std::istream& stream) {
+		std::istream& stream, int delimiter) {
+
+	TMessageType msgtype = MSG_UNINITIALIZED;
+	InboundMessage* msg;
+	Json::Reader reader;
+	Json::Value jsondoc;
+	string buffer;
+
+
+	// get the contents of the stream to the char '<delimiter>'
+	std::getline(stream, buffer, (char) delimiter);
+
+	// parse the content
+	reader.parse(buffer, jsondoc, false);
+
+	// get the Message type from the json data
+	msgtype = (TMessageType) jsondoc["type"].asInt();
+
+	switch(msgtype) { // create the message
+	case MSG_START:
+		msg = new MsgStart( );
+		break;
+	case MSG_STOP:
+		msg = new MsgStop( );
+		break;
+	case MSG_GET_DEVICE_LIST:
+		msg = new MsgDeviceList( );
+		break;
+	case MSG_EXIT:
+		msg = new MsgExit( );
+		break;
+	default:
+		msg = NULL;
+		break;
+	}
+
+	return msg;
 }
 
 OutboundMessage* soundalchemy::MsgStart::instruct(DspServer& server) {
-	server.start();
-	AckStart *reply = new AckStart();
+	const char * error = NULL;
+	TAlchemyError err = server.start();
+	if(err != E_OK) error = STR_ERRORS[err];
+	OutboundMessage *reply =  OutboundMessage::AckStart( error );
+	reply->setChannelId(getChannelId());
 	setReply(reply);
 	return reply;
 }
 
 OutboundMessage* soundalchemy::MsgStop::instruct(DspServer& server) {
 	server.stop();
-	AckStop *reply = new AckStop();
+	OutboundMessage *reply = OutboundMessage::AckStop(NULL);
+	reply->setChannelId(getChannelId());
 	setReply(reply);
 	return reply;
 }
 
 OutboundMessage* soundalchemy::MsgExit::instruct(DspServer& server) {
 	server.stopListening();
-	OutboundMessage *reply = new OutboundMessage(Message::MSG_EXIT);
+	OutboundMessage *reply = OutboundMessage::AckExit();
+	reply->setChannelId(getChannelId());
 	setReply(reply);
 	return reply;
 }
 
-void soundalchemy::AckDeviceList::beginDevice(const char* name,
+
+OutboundMessage* MsgGetInputStream::instruct(DspServer& server) {
+	OutboundMessage* reply = OutboundMessage::AckGetInputStream(
+			server.getInputStream().getOwner().getName(),
+			server.getInputStream().getId()
+			);
+	reply->setChannelId(getChannelId());
+	setReply(reply);
+	return reply;
+}
+
+OutboundMessage* MsgSetInputStream::instruct(DspServer& server) {
+	TAlchemyError err = server.setInputStream(device_name_.c_str(), id_);
+	const char* error = NULL;
+	if(err != E_OK ) error = STR_ERRORS[err];
+	OutboundMessage * reply = OutboundMessage::AckSetInputStream(error);
+	reply->setChannelId(getChannelId());
+	return reply;
+}
+
+void soundalchemy::OutboundMsgDeviceList::beginDevice(const char* name,
 		const char* fullname) {
+	AudioInf::beginDevice(name, fullname);
+	current_device_.clear();
+	current_device_["input_streams"] = Json::Value(Json::arrayValue);
+	current_device_["output_streams"] = Json::Value(Json::arrayValue);
 }
 
-void soundalchemy::AckDeviceList::stream(int id, const char* name, bool input) {
+void soundalchemy::OutboundMsgDeviceList::stream(int id, const char* name, bool input) {
+	AudioInf::stream(id, name, input);
+	Json::Value stream;
+	stream[Json::valueToString(id)] = string(name);
+	if(input)
+		current_device_["input_streams"].append(stream);
+	else current_device_["output_streams"].append(stream);
+
 }
 
-void soundalchemy::AckDeviceList::endDevice() {
+void soundalchemy::OutboundMsgDeviceList::endDevice() {
+	dataroot_[getCurrent().fullname_] = current_device_;
 }
 
-AudioInf::DeviceInf& soundalchemy::AckDeviceList::operator ->(void) {
-}
-
-AudioInf::DeviceInf& soundalchemy::AckDeviceList::operator *(void) {
-}
-
-AudioInf& soundalchemy::AckDeviceList::operator ++(int int1) {
-}
-
-AudioInf& soundalchemy::AckDeviceList::operator ++(void) {
-}
-
-bool soundalchemy::AckDeviceList::end(void) {
-}
-
-bool soundalchemy::AckDeviceList::empty(void) {
-}
-
-void soundalchemy::AckDeviceList::begin(void) {
-}
 
 OutboundMessage* soundalchemy::MsgDeviceList::instruct(DspServer& server) {
-	AckDeviceList *reply = new AckDeviceList();
+	OutboundMsgDeviceList *reply = new OutboundMsgDeviceList();
+	reply->setChannelId(getChannelId());
 	server.getDeviceList(*reply);
 	setReply(reply);
 	return reply;
 }
 
+// /////////////////////////////////////////////////////////////////////////////
+// Acknowledge message initializers ////////////////////////////////////////////
+// /////////////////////////////////////////////////////////////////////////////
+
+OutboundMessage* OutboundMessage::MsgSendClientID( Message::TChannelID id ) {
+	return new OutboundMessage(MSG_SEND_CLIENT_ID);
 }
+
+OutboundMessage* OutboundMessage::AckStart( const char* error) {
+	OutboundMessage *msg = new OutboundMessage(MSG_START);
+	if( error != NULL ) msg->dataroot_["error"] = std::string(error);
+	return msg;
+}
+
+OutboundMessage* OutboundMessage::AckStop( const char* error) {
+	OutboundMessage *msg = new OutboundMessage(MSG_STOP);
+	if( error != NULL ) msg->dataroot_["error"] = std::string(error);
+	return msg;
+}
+
+
+OutboundMessage* OutboundMessage::AckExit( void ) {
+	return new OutboundMessage(MSG_EXIT);
+}
+
+OutboundMessage* OutboundMessage::AckGetInputStream(const char* device_name, int id) {
+	OutboundMessage *msg = new OutboundMessage(MSG_GET_INPUT_STREAM);
+	msg->dataroot_["device_name"] = string(device_name);
+	msg->dataroot_["id"] = id;
+	return msg;
+}
+
+OutboundMessage* OutboundMessage::AckSetInputStream(const char* error) {
+	OutboundMessage *msg = new OutboundMessage(MSG_SET_INPUT_STREAM);
+	if(error != NULL) msg->dataroot_["error"] = string(error);
+	return msg;
+}
+
+}
+
+
+
+
 
  /* namespace soundalchemy */
 

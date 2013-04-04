@@ -23,10 +23,8 @@ namespace soundalchemy {
 class AndroidConnector: public ClientConnector {
 public:
 
-	AndroidConnector(DspServer& server):ClientConnector(server) {}
-
+	AndroidConnector():ClientConnector("Android") {}
 	virtual ~AndroidConnector();
-
 
 	virtual void send(OutboundMessage& message);
 

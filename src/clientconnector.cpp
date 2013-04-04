@@ -18,61 +18,75 @@
 
 namespace soundalchemy {
 
-/*
- * ClientConnector abstract class implementation *******************************
- */
+////////////////////////////////////////////////////////////////////////////////
+/// ClientConnector abstract class implementation
+////////////////////////////////////////////////////////////////////////////////
 
-ClientConnector::ClientConnector(DspServer& server):watcher_(*this),
-		server_(server) {
+ClientConnector::ClientConnector(std::string name): name_(name), watcher_(*this),
+		watching_(false), server_(NULL) {
 	thread_ = Thread::getNewThread();
+	mutex_ = Thread::getMutex();
 }
 
 void ClientConnector::instructServer(InboundMessage& message) {
-	server_.processMessage(message);
+	server_->processMessage(message);
 }
 
 ClientConnector::~ClientConnector() {
-	// TODO Auto-generated destructor stub
-	watching_ = false;
+	stopWatching();
+	delete mutex_;
 	delete thread_;
 }
 
 bool ClientConnector::isWatching() {
-	bool ret;
-	ret = watching_;
+	mutex_->lock();
+	bool ret = watching_;
+	mutex_->unlock();
 	return ret;
+
 }
 
 TAlchemyError ClientConnector::watch(void) {
-	watching_ = true;
+	mutex_->lock();
 
-
-	int ret = thread_->run(watcher_);
-	log(LEVEL_INFO, "Listening on cli");
-
-	if (ret != 0)
-		return E_START_LISTENER;
+	if(!watching_) {
+		watching_ = true;
+		int ret = thread_->run(watcher_);
+		if (ret != 0) {
+			mutex_->unlock();
+			return E_START_LISTENER;
+		}
+		log(LEVEL_INFO, (std::string("Listening on ")+getName()).c_str());
+	}
+	mutex_->unlock();
 
 	return E_OK;
 }
 
 void ClientConnector::stopWatching(void) {
-
-	watching_ = false;
-
-	//pthread_join(thread_id_, NULL);
-
+	mutex_->lock(); watching_ = false; mutex_->unlock();
+	Thread* current = Thread::getCurrent();
+	thread_->join(*current);
+	delete current;
 }
+
+
 void* ClientConnector::WatchInput::run(void)  {
 	ClientConnector& self = parent_;
 
-	while (self.watching_) {
+	while (self.isWatching()) {
 		InboundMessage* message = self.read();
-		self.instructServer(*message);
-		// TODO check the message for validity
+		if(message != NULL ) {
+			self.instructServer(*message);
+			if(message->isExitMessage()) {
+				self.mutex_->lock();
+				self.watching_ = false;
+				self.mutex_->unlock();
+			}
+		}
 	}
 
-	log(LEVEL_INFO, "Listener out");
+	log(LEVEL_INFO, (self.getName() + " Listener out").c_str());
 	return NULL;
 }
 

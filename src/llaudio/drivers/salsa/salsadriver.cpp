@@ -39,6 +39,8 @@ SalsaDriver::~SalsaDriver() {
 
 TErrors SalsaDriver::detectDevices() {
 
+	devlist_->clear();
+
 #ifdef USE_EXCEPTIONS
 	TErrors e = E_OK;
 	try {
@@ -138,6 +140,7 @@ TErrors SalsaDriver::findDevices(void)
 			for(it = ret.first; it != ret.second; it++)
 			{
 				os = it->second;
+				setStreamOwner(*os, *device);
 				device->getOutputList()->add(os->getId(), os);
 			}
 
@@ -149,7 +152,7 @@ TErrors SalsaDriver::findDevices(void)
 			for(it_in = ret_in.first; it_in != ret_in.second; it_in++)
 			{
 				is = it_in->second;
-				//device->istreams_[is->getId()] = is;
+				setStreamOwner(*is, *device);
 				device->getInputList()->add(is->getId(), is);
 			}
 

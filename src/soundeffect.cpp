@@ -11,10 +11,17 @@
 namespace soundalchemy {
 
 SoundEffect::SoundEffect(unsigned int inputs, unsigned int outputs):
-	in_channels_(inputs), out_channels_(outputs){
+		unique_id_(generateUniqueID()), in_channels_(inputs), out_channels_(outputs){
 
 	inputs_ = new InputPort[in_channels_];
 	outputs_ = new OutputPort[in_channels_];
+}
+
+SoundEffect::TEffectID SoundEffect::generateUniqueID(void) {
+	static TEffectID id = 0;
+	TEffectID ret = id;
+	id++;
+	return ret;
 }
 
 //void SoundEffect::setInputChannels(unsigned int count) {

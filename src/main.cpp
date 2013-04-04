@@ -13,12 +13,10 @@
 
 
 #include "dspserver.h"
-
-using namespace soundalchemy;
-#include "llaudio/llaudio.h"
+#include "androidconnector.h"
 #include <iostream>
 
-using namespace llaudio;
+using namespace soundalchemy;
 using namespace std;
 
 int main(int argc, const char * argv[] )
@@ -59,10 +57,11 @@ int main(int argc, const char * argv[] )
 
 	initLogs();
 	//enableDebug();
-	log(LEVEL_INFO, "Hi, this is the soundalchemy deamon prompt");
+	log(LEVEL_INFO, "Sound Alchemy started in service mode");
 	DspServer dspserver;
 
-	dspserver.listenOnCliPrompt();
+	AndroidConnector android;
+	dspserver.listenOn(android);
 
 	dspserver.startListening();
 

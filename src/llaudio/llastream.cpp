@@ -65,7 +65,7 @@ llaudio::llaFileStream::llaFileStream(const char* file) {
 
 TErrors llaudio::llaFileStream::open(void) {
 
-	file_ = fopen(filename_, "rwb");
+	file_ = fopen(filename_.c_str(), "rwb");
 	if(file_ == NULL) {
 		LOGGER().error(E_OPEN_STREAM,
 				(string("Failed to open file: ")+filename_).c_str());
@@ -129,7 +129,7 @@ void llaudio::llaFileStream::close(void) {
 }
 
 const char* llaudio::llaFileStream::getName(void) {
-	return filename_;
+	return filename_.c_str();
 }
 
 int llaudio::llaFileStream::getId(void) {

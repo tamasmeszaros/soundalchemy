@@ -17,11 +17,7 @@
 #include "../../llaudioprivate.h"
 #include <string>
 
-#ifdef ANDROID
-#include <../../../lib/salsa-lib/src/asoundlib.h>
-#else
 #include  <alsa/asoundlib.h>
-#endif
 
 namespace llaudio {
 
@@ -43,8 +39,8 @@ public:
 	} TState;
 
 
-	SalsaStream(const char* name, const char * id, int card_number, int devnum,
-			TDirections direction);
+	SalsaStream( const char* name, const char * id,
+			int card_number, int devnum, TDirections direction);
 	~SalsaStream();
 
 	/* implementable methods from the interface llaStream: */

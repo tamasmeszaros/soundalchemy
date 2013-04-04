@@ -28,6 +28,7 @@ public:
 	virtual ~SalsaDriver();
 
 	virtual TErrors detectDevices();
+
 private:
 	typedef std::multimap<TAlsaCardId, SalsaStream*> IStreamCache;
 	typedef std::multimap<TAlsaCardId, SalsaStream*> OStreamCache;

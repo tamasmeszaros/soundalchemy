@@ -127,10 +127,10 @@ public:
 		RunArg *arg = new RunArg();
 		arg->runnable = &r;
 		arg->thread = this;
-		int ret;
+		int ret = 0;
 
 		if( thread_ != pthread_self())
-			ret = pthread_create(&thread_, NULL, proc, arg );
+			ret = pthread_create(&thread_, &thread_attr_, proc, arg );
 		else returnval_ = r.run();
 
 		return ret;
@@ -179,6 +179,7 @@ private:
 		rarg->thread->returnval_ = rarg->runnable->run();
 		void* ret = rarg->thread->returnval_;
 		delete rarg;
+		//std::cout<< "proc end" << std::endl;
 		return ret;
 	}
 

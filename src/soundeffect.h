@@ -20,6 +20,8 @@ public:
 	typedef double TParamValue;
 	typedef unsigned int TPortID;
 
+	typedef unsigned long TEffectID;
+
 	struct Param {
 		Param(const char* name, TParamID id);
 		std::string name;
@@ -76,7 +78,9 @@ public:
 	virtual void process(unsigned int sample_count) = 0;
 
 protected:
+	static TEffectID generateUniqueID(void);
 
+	TEffectID unique_id_;
 	unsigned int in_channels_;
 	unsigned int out_channels_;
 

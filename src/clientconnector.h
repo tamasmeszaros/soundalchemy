@@ -23,8 +23,12 @@ class DspServer;
 
 
 class ClientConnector {
+	std::string name_;
+	Message::TChannelID channel_id_;
+
 public:
 
+	ClientConnector(std::string name);
 	virtual ~ClientConnector();
 
 	virtual void send(OutboundMessage& message) = 0;
@@ -36,10 +40,16 @@ public:
 
 	bool isWatching();
 
+	std::string& getName() { return name_; }
+	void setChannelId(Message::TChannelID chid) { channel_id_ = chid; }
+
 protected:
 
-	ClientConnector(DspServer& server);
-	DspServer * getServer();
+	Message::TChannelID getChannelId(void) { return channel_id_; }
+
+	void connect(DspServer& server) { server_ = &server; }
+
+	DspServer* getServer() {  return server_; }
 
 	void instructServer(InboundMessage& message);
 	virtual InboundMessage* read(void) = 0;
@@ -55,11 +65,14 @@ protected:
 
 
 	Thread *thread_;
+	Mutex * mutex_;
+
 	bool watching_;
 
 	friend class DspServer;
+
 private:
-	DspServer& server_;
+	DspServer* server_;
 };
 
 

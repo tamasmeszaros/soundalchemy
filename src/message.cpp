@@ -111,21 +111,39 @@ OutboundMessage* soundalchemy::MsgExit::instruct(DspServer& server) {
 }
 
 
-OutboundMessage* MsgGetInputStream::instruct(DspServer& server) {
-	OutboundMessage* reply = OutboundMessage::AckGetInputStream(
+OutboundMessage* MsgGetStream::instruct(DspServer& server) {
+	OutboundMessage* reply;
+	if(direction_ == INPUT_STREAM ) {
+	reply = OutboundMessage::AckGetStream(
 			server.getInputStream().getOwner().getName(),
-			server.getInputStream().getId()
+			server.getInputStream().getId(),
+			direction_
 			);
+	} else {
+		reply = OutboundMessage::AckGetStream(
+			server.getOutputStream().getOwner().getName(),
+			server.getOutputStream().getId(),
+			direction_
+			);
+	}
 	reply->setChannelId(getChannelId());
 	setReply(reply);
 	return reply;
 }
 
-OutboundMessage* MsgSetInputStream::instruct(DspServer& server) {
-	TAlchemyError err = server.setInputStream(device_name_.c_str(), id_);
+OutboundMessage* MsgSetStream::instruct(DspServer& server) {
+
+	TAlchemyError err = E_OK;
 	const char* error = NULL;
+	if( direction_ ) {
+		err = server.setInputStream(device_name_.c_str(), id_);
+	} else {
+		err = server.setOutputStream(device_name_.c_str(), id_);
+	}
+
 	if(err != E_OK ) error = STR_ERRORS[err];
-	OutboundMessage * reply = OutboundMessage::AckSetInputStream(error);
+
+	OutboundMessage * reply = OutboundMessage::AckSetStream(error);
 	reply->setChannelId(getChannelId());
 	return reply;
 }
@@ -166,7 +184,9 @@ OutboundMessage* soundalchemy::MsgDeviceList::instruct(DspServer& server) {
 // /////////////////////////////////////////////////////////////////////////////
 
 OutboundMessage* OutboundMessage::MsgSendClientID( Message::TChannelID id ) {
-	return new OutboundMessage(MSG_SEND_CLIENT_ID);
+	OutboundMessage *msg = new MsgClientID(MSG_SEND_CLIENT_ID);
+	msg->dataroot_["channel_alloced"] = id;
+	return msg;
 }
 
 OutboundMessage* OutboundMessage::AckStart( const char* error) {
@@ -186,15 +206,20 @@ OutboundMessage* OutboundMessage::AckExit( void ) {
 	return new OutboundMessage(MSG_EXIT);
 }
 
-OutboundMessage* OutboundMessage::AckGetInputStream(const char* device_name, int id) {
-	OutboundMessage *msg = new OutboundMessage(MSG_GET_INPUT_STREAM);
+OutboundMessage* OutboundMessage::AckGetStream(const char* device_name, int id,
+		TStreamDirection dir) {
+	OutboundMessage *msg = new OutboundMessage(MSG_GET_STREAM);
 	msg->dataroot_["device_name"] = string(device_name);
 	msg->dataroot_["id"] = id;
+	if(dir == INPUT_STREAM)
+		msg->dataroot_["direction"] = string("input");
+	else msg->dataroot_["direction"] = string("output");
+
 	return msg;
 }
 
-OutboundMessage* OutboundMessage::AckSetInputStream(const char* error) {
-	OutboundMessage *msg = new OutboundMessage(MSG_SET_INPUT_STREAM);
+OutboundMessage* OutboundMessage::AckSetStream(const char* error) {
+	OutboundMessage *msg = new OutboundMessage(MSG_SET_STREAM);
 	if(error != NULL) msg->dataroot_["error"] = string(error);
 	return msg;
 }

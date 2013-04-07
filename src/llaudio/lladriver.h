@@ -38,10 +38,6 @@ public:
 
 protected:
 
-	void setStreamOwner(llaStream& stream, llaDevice& owner) {
-		stream.setOwner(owner);
-	}
-
 	llaDeviceList* devlist_;
 
 

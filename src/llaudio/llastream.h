@@ -139,12 +139,13 @@ public:
 	/// Default destructor. Does nothing.
 	virtual ~llaStream() {}
 
-	llaDevice& getOwner(void) { return *owner_; }
+	virtual llaDevice& getOwner(void) { return *owner_; }
+
+	virtual void setOwner(llaDevice& owner) { owner_ = &owner; }
 
 protected:
 
-	void setOwner(llaDevice& owner) { owner_ = &owner; }
-	friend class llaDriver;
+
 
 	////////////////////////////////////////////////////////////////////////////
 	/// Functions for manipulating an llaAudioBuffer object's private properties

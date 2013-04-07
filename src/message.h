@@ -19,10 +19,16 @@
 #include <string>
 #include <cstdio>
 #include <json/json.h>
+#include "llaudio/llaudio.h"
 
 namespace soundalchemy {
 
 class DspServer;
+
+typedef enum {
+	INPUT_STREAM,
+	OUTPUT_STREAM,
+} TStreamDirection;
 
 /**
  * @brief Base class for a Message
@@ -52,10 +58,8 @@ protected:
 		MSG_STOP,               //!< Stop the sound processing
 		MSG_EXIT,               //!< Kill the alchemy service
 		MSG_GET_DEVICE_LIST,    //!< Obtain information about sound devices
-		MSG_SET_INPUT_STREAM,   //!< Set the audio input for processing
-		MSG_SET_OUTPUT_STREAM,  //!< Set the audio output for processing
-		MSG_GET_INPUT_STREAM,
-		MSG_GET_OUTPUT_STREAM,
+		MSG_SET_STREAM,         //!< Set the audio input/output for processing
+		MSG_GET_STREAM,			//!< Get the current input/output stream
 		MSG_GET_EFFECT_DATABASE,//!< Get the database of available effects
 		MSG_ADD_EFFECT,		    //!< Add an effect to the signal chain
 		MSG_REMOVE_EFFECT,      //!< Remove an effect from the signal chain
@@ -124,8 +128,9 @@ public:
 	static OutboundMessage* AckStart( const char* error);
 	static OutboundMessage* AckStop( const char* error );
 	static OutboundMessage* AckExit( void );
-	static OutboundMessage* AckGetInputStream(const char* device_name, int id);
-	static OutboundMessage* AckSetInputStream(const char* error);
+	static OutboundMessage* AckGetStream(llaudio::TDeviceId device_name,
+			llaudio::TStreamId id, TStreamDirection direction);
+	static OutboundMessage* AckSetStream(const char* error);
 
 
 	virtual ~OutboundMessage() {}
@@ -151,7 +156,7 @@ public:
 protected:
 
 	OutboundMessage(TMessageType reply_for):
-			ack_for_(reply_for) {
+		ack_for_(reply_for) {
 		dataroot_["type"] = MSG_ACK;
 		dataroot_["channelID"] = getChannelId();
 		dataroot_["ack_for"] = reply_for;
@@ -387,6 +392,7 @@ public:
 	MsgClientID(TChannelID new_client):
 		OutboundMessage(MSG_UNINITIALIZED),
 		new_client_(new_client) {
+		dataroot_["type"] = MSG_SEND_CLIENT_ID;
 		dataroot_["clientID"] = (TChannelID) new_client_;
 	}
 };
@@ -394,24 +400,27 @@ public:
 // MSG_SET_INPUT_STREAM ////////////////////////////////////////////////////////
 //
 
-class MsgGetInputStream: public InboundMessage {
+class MsgGetStream: public InboundMessage {
+	TStreamDirection direction_;
 public:
+	MsgGetStream(TStreamDirection direction) : direction_(direction) {}
+
 	OutboundMessage* instruct(DspServer& server);
 };
 
 // MSG_SET_INPUT_STREAM ////////////////////////////////////////////////////////
 //
 
-class MsgSetInputStream: public InboundMessage {
+class MsgSetStream: public InboundMessage {
 	std::string device_name_;
 	int id_;
+	TStreamDirection direction_;
 public:
-	MsgSetInputStream(const char* device_name, int id):
-		device_name_(device_name), id_(id) {}
+	MsgSetStream(const char* device_name, int id, TStreamDirection dir):
+		device_name_(device_name), id_(id), direction_(dir) {}
 
 	OutboundMessage* instruct(DspServer& server);
 };
-
 
 
 } /* namespace soundalchemy */

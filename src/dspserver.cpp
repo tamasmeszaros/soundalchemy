@@ -22,7 +22,7 @@ using namespace std;
 
 namespace soundalchemy {
 
-llaDeviceManager& DspServer::lla_devman_ = llaDeviceManager::getInstance();
+
 
 class LLAErrorHandler: public llaErrorHandler {
 public:
@@ -38,7 +38,15 @@ public:
 		}
 		soundalchemy::log(saerr, getFormatedError(lvl, err, details));
 	}
+
+	LLAErrorHandler() {
+		enableLogging(true, true);
+		enableDebugMessages(true);
+		//useExceptions(true);
+	}
 } llaEH;
+
+llaDeviceManager& DspServer::lla_devman_ = llaDeviceManager::getInstance(llaEH);
 
 DspServer::DspServer():
 		dsp_process_(*this),
@@ -51,16 +59,16 @@ DspServer::DspServer():
 
 	this_thread_ = Thread::getCurrent();
 
-	llaEH.enableLogging(true, true);
-	llaEH.enableDebugMessages(true);
-	llaEH.useExceptions(true);
-	try {
-		lla_devman_.setErrorHandler(llaEH);
-	} catch (llaErrorHandler::Exception& ex) {
-		log(LEVEL_ERROR, ex.what());
-	}
+//	llaEH.enableLogging(true, true);
+//	llaEH.enableDebugMessages(true);
+//	llaEH.useExceptions(true);
+//	try {
+//		lla_devman_.setErrorHandler(llaEH);
+//	} catch (llaErrorHandler::Exception& ex) {
+//		log(LEVEL_ERROR, ex.what());
+//	}
 
-	lla_devman_.refresh();
+	//lla_devman_.refresh();
 }
 
 DspServer::~DspServer() {

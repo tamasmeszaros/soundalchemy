@@ -137,10 +137,10 @@ TErrors SalsaDriver::findDevices(void)
 			SalsaStream * os;
 
 
-			for(it = ret.first; it != ret.second; it++)
+			for(it = ret.first; it != ret.second && it != ostreamcache_.end(); it++)
 			{
 				os = it->second;
-				setStreamOwner(*os, *device);
+				os->setOwner(*device);
 				device->getOutputList()->add(os->getId(), os);
 			}
 
@@ -149,10 +149,10 @@ TErrors SalsaDriver::findDevices(void)
 			ret_in = istreamcache_.equal_range(device->getId());
 			SalsaStream * is;
 
-			for(it_in = ret_in.first; it_in != ret_in.second; it_in++)
+			for(it_in = ret_in.first; it_in != ret_in.second && it != istreamcache_.end(); it_in++)
 			{
 				is = it_in->second;
-				setStreamOwner(*is, *device);
+				is->setOwner(*device);
 				device->getInputList()->add(is->getId(), is);
 			}
 

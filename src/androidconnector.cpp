@@ -32,8 +32,10 @@ InboundMessage* AndroidConnector::read(void) {
 	InboundMessage* dest_msg =
 			InboundMessage::unserialize(Message::PROTOCOL_JSON, cin, ENDCHAR);
 
-	if(dest_msg == NULL) log(LEVEL_WARNING, STR_ERRORS[E_READ]);
-	dest_msg->setChannelId(getChannelId());
+	if(dest_msg == NULL) {
+		log(LEVEL_WARNING, STR_ERRORS[E_READ]);
+	}
+	else dest_msg->setChannelId(getChannelId());
 
 	return dest_msg;
 }

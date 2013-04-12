@@ -7,105 +7,177 @@
 
 #ifndef SOUNDEFFECT_H_
 #define SOUNDEFFECT_H_
-#include <map>
+#include <vector>
 #include <string>
+#include "llaudio/llaudio.h"
 
 namespace soundalchemy {
 
+/**
+ * Base class for an audio effect.
+ */
 class SoundEffect {
 public:
 
+	/// Identifier type for an effect parameter
 	typedef unsigned long TParamID;
+
+	/// fundamental type for an audio sample
 	typedef float TSample;
+
+	/// Representation of a parameter value
 	typedef double TParamValue;
+
+	/// Identifier of an audio port
 	typedef unsigned int TPortID;
 
+	/**
+	 * Enum type for a port direction
+	 */
+	typedef enum {
+		INPUT_PORT,//!< Input port
+		OUTPUT_PORT//!< Output port
+	} TPortDirection;
+
+	/// Unique identifier of an effect instance
 	typedef unsigned long TEffectID;
 
-	struct Param {
-		Param(const char* name, TParamID id);
-		std::string name;
-		TParamID id;
-		double value;
-		void* valptr;
+	/**
+	 * abstract base class for an Effect parameter
+	 */
+	class Param {
+
+		// an optional name for the parameter
+		std::string name_;
+
+		// An id for the parameter. For now it represents the index of this
+		// parameter in the params_ array
+		TParamID id_;
+
+		// The ID is set by the SoundEffect object when the parameter is added
+		// with the addParam() method
+		friend class SoundEffect;
+
+	public:
+		/// constructor
+		Param(std::string name = ""): name_(name) {}
+
+		/// virtual destructor
+		virtual ~Param() {}
+
+		/// get the name
+		std::string getName() { return name_; }
+
+		/// get the id (index)
+		TParamID getId() { return id_; }
+
+		/**
+		 *
+		 * @return
+		 */
+		virtual TParamValue getValue() = 0;
+
+		/**
+		 *
+		 * @param value
+		 */
+		virtual void setValue(double value) = 0;
+
 	};
 
 	class Port {
-		SoundEffect&  owner_;
-		TSample *stream_;
+
+		TPortDirection dir_;
+		std::string name_;
+		TPortID id_;
+
+		// The ID is set by the SoundEffect object when the port is added
+		// with the addPort() method
+		friend class SoundEffect;
 	public:
-		void setStream(TSample *stream) { stream_ = stream;}
-		SoundEffect& getOwner(void) { return owner_; }
-	protected:
-		Port(SoundEffect& e):owner_(e){}
+		Port(TPortDirection dir, std::string name = ""): dir_(dir),
+				name_(name) {}
+
+		virtual ~Port() {}
+
+		virtual void connect(Port& port) = 0;
+		virtual TSample* getBuffer() = 0;
+
+		std::string getName() { return name_; }
+		TPortDirection getDirection() { return dir_; }
 	};
 
-	class OutputPort;
-	class InputPort: public Port {
-		OutputPort *source_;
-	public:
+	SoundEffect();
 
-		OutputPort* getSource(void) { return source_; }
-		void setSource(OutputPort& source) { source_ = &source; }
-
-		InputPort():Port(*this), source_(NULL){}
-	};
-
-	class OutputPort: public Port {
-		InputPort *sink_;
-	public:
-		InputPort* getSink(void) { return sink_; }
-		void setSink(InputPort& sink) { sink_ = &sink; }
-
-		OutputPort():Port(*this), sink_(NULL){}
-	};
-
-	SoundEffect(unsigned int inputs, unsigned int outputs);
 	virtual ~SoundEffect();
 
-	TParamValue getParam(const char * name);
-	TParamValue getParam(TParamID id);
-
-	virtual void setParam(const char* name, TParamValue value);
-	virtual void setParam(TParamID id, TParamValue value);
+	Param* getParam(std::string name);
+	Param* getParam(TParamID id);
 
 	unsigned int getInputsCount(void);
 	unsigned int getOutputsCount(void);
+	unsigned int getParamsCount(void);
 
-	InputPort* getInputPort(TPortID index);
-	OutputPort* getOutputPort(TPortID index);
+	Port* getInputPort(TPortID index);
+	Port* getInputPort(std::string name);
+	Port* getOutputPort(TPortID index);
+	Port* getOutputPort(std::string name);
+
+	TEffectID getUniqueId() { return unique_id_; }
 
 	virtual void process(unsigned int sample_count) = 0;
 
+	virtual void setSampleRate(llaudio::TSampleRate srate) {
+		sample_rate_ = srate;
+	}
+
+
+
 protected:
+
+	void addParam(Param *param);
+	void addPort(Port *port);
+
+
 	static TEffectID generateUniqueID(void);
 
 	TEffectID unique_id_;
-	unsigned int in_channels_;
-	unsigned int out_channels_;
 
-	InputPort *inputs_;
-	OutputPort *outputs_;
+private:
 
-	typedef std::map<TParamID, Param*> TParamMap;
-	typedef TParamMap::iterator TParamMapIt;
+	typedef std::vector<Port*> TPortVector;
+	typedef std::vector<Param*> TParamVector;
 
-	TParamMap params_;
+	TPortVector inputs_;
+	TPortVector outputs_;
 
-};
+	TParamVector params_;
+	llaudio::TSampleRate sample_rate_;
 
-class LADSPAEffect: public SoundEffect {
-public:
-	void process(unsigned int sample_count);
 };
 
 class MixerEffect: public SoundEffect {
+	class MixerParam: public Param {
+		double value_;
+	public:
+		MixerParam( std::string name ): Param( name ) {}
+		double getValue() { return value_; }
+		void setValue(double value) { value_ = value; }
+	};
+
 public:
-	MixerEffect(unsigned int inputs, unsigned int outputs);
 
-	void setInputsCount(unsigned int inputs);
-	void setOutputsCount(unsigned int outputs);
+	class MixerPort: public Port {
+		TSample *buffer_;
+	public:
+		MixerPort(TPortDirection dir, std::string name, TSample *buffer = NULL ):
+			Port(dir, name), buffer_(buffer) {}
+		virtual void connect(Port& port) { buffer_ = port.getBuffer(); }
 
+		virtual TSample* getBuffer() { return buffer_; }
+	};
+
+	MixerEffect();
 
 	void process(unsigned int sample_count);
 };

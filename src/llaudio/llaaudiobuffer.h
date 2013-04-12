@@ -25,12 +25,8 @@ namespace llaudio {
  * of sample values is possible without knowing the actual byte representation
  * of the samples.
  */
-class llaAudioBuffer {
+class llaAudioPipe {
 public:
-
-	////////////////////////////////////////////////////////////////////////////
-	/// Data types bound to this class
-	////////////////////////////////////////////////////////////////////////////
 
 	/**
 	 * This struct is intended to be used as a data type with it's defined
@@ -53,7 +49,7 @@ public:
 		bool littleendian;
 		bool sig;
 		TSize sample_width;
-		friend class llaAudioBuffer;
+		friend class llaAudioPipe;
 	};
 
 	/// sample formats
@@ -68,44 +64,126 @@ public:
 	static const TSampleFormat FORMAT_FLOAT64;	//!< Floating 64bit
 
 	/**
-	 * Sample organization types
+	 * Sample organization
 	 */
 	typedef enum {
 		INTERLEAVED,    //!< Samples for each channel following each other.
 		NON_INTERLEAVED,//!< Channels are separated in multiple buffers
 	} TSampleOrg;
 
+	class Buffer {
+	protected:
+
+		TSampleOrg sampleorg_alloced_;
+		TSize frames_alloced_;
+		TChannels channels_alloced_;
+		TSampleFormat format_alloced_;
+
+		bool buffer_alloced_;
+		char* iraw_;
+		char** niraw_;
+
+		// raw pointer to non-interleaved floating point samples
+		// used to deliver frames in a unified format independent of the internal
+		// formats
+		float** rawfp_non_i_;
+
+
+
+		friend class llaAudioPipe;
+		friend class llaStream;
+
+		TSize framesRequested;
+
+		/**
+		 * @return The size of the buffer given with the number of frames
+		 */
+		TSize getLength(void) { return frames_alloced_; }
+		bool fail_state_;
+
+	public:
+
+		/// Variables which are handled as requested values. No warranty for
+		/// acceptance. The allocation is done in the read(), write(), and
+		/// connect() methods of a llaStream object and these parameters
+		/// are decided in conjunction with the features of the audio device.
+		/// The final parameters can be retrieved with the getter functions.
+		TSampleOrg organizationRequested;
+		TChannels channelsRequested;
+		TSampleFormat formatRequested;
+
+		Buffer();
+
+		/**
+		 *
+		 * @param channels
+		 */
+		void changeChannelCount(TChannels channels);
+
+		void convertOrganization(TSampleOrg organization);
+
+		/**
+		 *
+		 * @return
+		 */
+		const TSampleFormat getFormat(void) { return format_alloced_; }
+
+		/**
+		 * @return Returns the number of channels currently allocated.
+		 */
+		TChannels getChannels(void) { return channels_alloced_; }
+
+		/**
+		 * This method prepares a raw float sample matrix which has
+		 * channels*frames dimensions. The array is a copy of the samples
+		 * in the buffer.
+		 * @return Returns a channels*frames dimensional float matrix
+		 */
+		float** getSamples( void );
+
+
+		void writeSamples();
+
+		void alloc(void);
+		void clear(void);
+
+		bool isAlloced() { return buffer_alloced_; }
+
+	};
+
 	////////////////////////////////////////////////////////////////////////////
 	/// Class methods
 	////////////////////////////////////////////////////////////////////////////
 
-	/**
-	 * @return The size of the buffer given with the number of frames
-	 */
-	TSize getBufferLength(void) { return frames_; }
 
-	/**
-	 * @return Returns the number of channels.
-	 */
-	TChannels getChannels(void) { return channels_; }
-
-	/**
-	 * This method prepares a raw float sample matrix which has channels*frames
-	 * dimensions. The array is a copy of the samples in the buffer.
-	 * @return Returns a channels*frames dimensional float matrix
-	 */
-	float** getSamples( void );
-
-	/**
-	 * Writes the changes made in the obtained float matrix.
-	 */
-	void writeSamples();
+	bool fail(void) {
+		return fail_state_ || input_buffer_.fail_state_ || output_buffer_.fail_state_;
+	}
 
 	/**
 	 *
-	 * @param channels
+	 * @return
 	 */
-	void changeChannelCount(TChannels channels);
+	Buffer& getInputBuffer() { return input_buffer_; }
+
+	/**
+	 *
+	 * @return
+	 */
+	Buffer& getOutputBuffer() { return output_buffer_; }
+
+
+	/**
+	 * @return The size of the buffer given with the number of frames
+	 */
+	TSize getBufferLength(void) { return frames_count_; }
+
+	/**
+	 *
+	 * @param frames
+	 */
+	void setBufferLength(TSize frames);
+
 
 	/**
 	 *
@@ -119,10 +197,10 @@ public:
 	 *
 	 * @param frames
 	 */
-	llaAudioBuffer(TSize frames = DEFAULT_BUFFER_SIZE);
+	llaAudioPipe(TSize frames = DEFAULT_BUFFER_SIZE);
 
 	/// Default constructor
-	virtual ~llaAudioBuffer();
+	virtual ~llaAudioPipe();
 
 	////////////////////////////////////////////////////////////////////////////
 	/// functions to overload
@@ -144,54 +222,20 @@ public:
 	/* Operator overloads */
 
 
+
+
 protected:
 
-	/**
-	 *
-	 * @param frames
-	 */
-	void setBufferLength(TSize frames) { frames_ = frames; }
-
-	/**
-	 *
-	 * @param channels
-	 */
-	void setChannels(TChannels channels) { channels_ = channels; }
-
-	/**
-	 *
-	 * @param fmt
-	 */
-	void setFormat(const TSampleFormat fmt) { format_ = fmt; }
-
-	/**
-	 *
-	 * @return
-	 */
-	const TSampleFormat getFormat(void) { return format_; }
-
-	void alloc(void);
-	void clear(void);
-
-	// raw pointer to non-interleaved floating point samples
-	float** rawfp_non_i_;
-
-	TSampleOrg sampleorg_;
-	TSize frames_;
-	TChannels channels_;
-	TSampleFormat format_;
-
-	TSampleOrg sampleorg_alloced_;
-	TSize frames_alloced_;
-	TChannels channels_alloced_;
-	TSampleFormat format_alloced_;
-
+	// if set, the buffer is unusable until a call is made for clear()
+	bool fail_state_;
 	TSize lastwrite_;
-	//double latency_;
 
-	bool buffer_alloced_;
-	char* iraw_;
-	char** niraw_;
+private:
+
+	Buffer input_buffer_;
+	Buffer output_buffer_;
+
+	TSize frames_count_;
 
 
 	// This class has a friend llaStream. The internal parameters are

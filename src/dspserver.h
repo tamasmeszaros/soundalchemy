@@ -41,54 +41,92 @@ class DspServer {
 public:
 
 	/**
-	 * @brief The server's state is in one of these states
-	 */
-	typedef enum e_states
-	{
-		ST_STOPPED,         //!< The processing thread is completely killed.
-		//ST_PAUSED,          //!< The processing pipe (thread) is waiting.
-		ST_RUNNING,         //!< Processing is in progress.
-	} TState;
-
-	/**
 	 * default constructor and destructor
 	 */
 	DspServer();
 	virtual ~DspServer();
 
 	/**
-	 * Starts the server and the audio thread
+	 * Starts the audio processing
 	 * @return Returns an an error code defined in enum e_errors
 	 */
 	TAlchemyError start(void);
 
 	/**
-	 * Stops the audio process and the processing thread exits
+	 * Stops the audio processing. The thread for the processing exits.
 	 */
 	void stop(void);
 
-	void getDeviceList(AudioInf& devicelist);
+	/**
+	 * Collects information about the known audio devices and streams.
+	 * @param devicelist Target (empty) AudioInf type object.
+	 * @param redetect Triggers a complete re-detection of audio devices if true.
+	 */
+	void getDeviceList(AudioInf& devicelist, bool redetect);
 
+	/**
+	 * Sets the input audio source of the processing graph.
+	 * @param device The String ID of the audio device
+	 * @param id The integer ID of the actual stream on the device
+	 * @return Returns E_OK or an error constant from TAlchemyError on failure.
+	 */
 	TAlchemyError setInputStream(TDeviceId device, TStreamId id);
 
+	/**
+	 *
+	 * @param device
+	 * @param id
+	 * @return
+	 */
 	TAlchemyError setOutputStream(TDeviceId device, TStreamId id);
 
+	/**
+	 *
+	 * @return
+	 */
 	llaInputStream& getInputStream(void) { return proc_graph_.getInput(); }
 
+	/**
+	 *
+	 * @return
+	 */
 	llaOutputStream& getOutputStream(void) {  return proc_graph_.getOutput(); }
 
+	/**
+	 *
+	 * @param buffer_size
+	 */
 	void setBufferSize(TSize buffer_size);
 
+	/**
+	 *
+	 * @param sample_rate
+	 */
 	void setSampleRate(TSampleRate sample_rate);
 
-
+	/**
+	 *
+	 * @param effect
+	 */
 	void addEffect(SoundEffect* effect);
+
+	/**
+	 *
+	 * @return
+	 */
+	TProcessingState getState(void);
 
 	/**
 	 * Starts the command line listener.
 	 * @return Returns an an error code defined in enum e_errors
 	 */
 	TAlchemyError listenOn(ClientConnector& client);
+
+	/**
+	 *
+	 * @param client
+	 */
+	void clientOut(Message::TChannelID client);
 
 	/**
 	 * This function can be called by a client connector to stop the whole
@@ -119,15 +157,20 @@ private:
 	 */
 	void broadcastMessage(OutboundMessage& message);
 
-
-	class DspProcess: public Runnable, private llaAudioBuffer{
+	/**
+	 * This class represents the processing thread. It inherits the
+	 * llaAudioBuffer interface as a private base be able to overload specific
+	 * call-back functions as the onSamplesReady() method in which the
+	 * processing is taking place.
+	 */
+	class DspProcess: public Runnable, private llaAudioPipe {
 	public:
 		DspProcess(DspServer& server);
 		~DspProcess() {
 			delete proc_thread_;
 		}
 
-		TState getState(void) { return (TState) state_.val; }
+		TProcessingState getState(void) { return (TProcessingState) state_.val; }
 		void* run(void);
 
 		TAlchemyError startProcessing(void);
@@ -145,64 +188,77 @@ private:
 		void waitFor() { proc_thread_->waitOn(state_); };
 		DspServer& dspserver_;
 
+		Thread *proc_thread_;
 		class State: public ConditionVariable {
+			Thread *thread_;
 		public:
-			TState val;
-			TState state_requested_;
-			bool isTrue(void) { return val == ST_STOPPED; }
+			State(Thread* th): thread_(th) {}
+			TProcessingState val;
+			TProcessingState state_requested_;
+			bool isTrue(void) { return thread_->isRunning(); }
 		} state_;
 
 		unsigned int callback_counter_;
 
-		//Mutex *proc_mutex_;
-
-		Thread *proc_thread_;
 
 	} dsp_process_;
 
 	class Input: public MixerEffect {
 	public:
-		Input():MixerEffect(1,1), llainput(lla_devman_.getDefaultDevice().getInputStream()) { }
+		Input();
 
-		llaInputStream& llainput;
+		llaInputStream* llainput;
 	};
 
 	class Output: public MixerEffect {
 	public:
-		Output(): MixerEffect(1,2), llaoutput(lla_devman_.getDefaultDevice().getOutputStream()) { }
+		Output();
 
-		llaOutputStream& llaoutput;
+		llaOutputStream* llaoutput;
 	};
 
+	/**
+	 * @brief Class encapsulating the processing graph.
+	 *
+	 * An object of this class is a map of audio effects connected together in
+	 * a specific scheme. This is a very simple implementation of an effect
+	 * chain. The input is strictly mono and the output is a stereo signal.
+	 * Effects are stacked in a list of SoundEffect objects and their audio ports
+	 * are connected on addition by the addEffect method. If there is a
+	 * mono/stereo incompatibility then a MixerEffect is inserted which resolves
+	 * it.
+	 */
 	class ProcessingGraph {
 		typedef std::vector<SoundEffect*> TEffectStack;
 		typedef TEffectStack::iterator TEffectStackIt;
 
-		TEffectStack effectlist_;
+		TEffectStack effectstack_;
 		Mutex *mutex_;
 		Input input_;
 		Output output_;
+		TSampleRate sample_rate_;
 	public:
 
-		ProcessingGraph():mutex_(Thread::getMutex()){}
+		ProcessingGraph();
 		~ProcessingGraph() { delete mutex_; }
 
-		void setInput(llaInputStream& input) { input_.llainput = input; }
-		void setOutput(llaOutputStream& output) { output_.llaoutput = output; }
+		void setInput(llaInputStream& input) { input_.llainput = &input; }
+		void setOutput(llaOutputStream& output) { output_.llaoutput = &output; }
 
-		llaInputStream& getInput(void) { return input_.llainput; }
-		llaOutputStream& getOutput(void) { return output_.llaoutput; }
+		void setInputBuffer(SoundEffect::TSample *buffer);
+		void setOutputBuffer(SoundEffect::TSample *buffer_left,
+				SoundEffect::TSample *buffer_right);
 
-		void traverse(unsigned int sample_count) {
-			mutex_->lock();
-			input_.process(sample_count);
-			for(TEffectStackIt it = effectlist_.begin();
-					it != effectlist_.end(); it++ ) {
-				(*it)->process(sample_count);
-			}
-			output_.process(sample_count);
-			mutex_->unlock();
-		}
+		void setSampleRate();
+		TSampleRate getSampleRate() { return sample_rate_; }
+
+		unsigned int getInputChannelsCount() { return input_.getInputsCount(); }
+		unsigned int getOutputChannelsCount() { return output_.getOutputsCount(); }
+
+		llaInputStream& getInput(void) { return *(input_.llainput); }
+		llaOutputStream& getOutput(void) { return *(output_.llaoutput); }
+
+		void traverse(unsigned int sample_count) ;
 
 		void addEffect(SoundEffect* effect);
 	} proc_graph_;
@@ -210,7 +266,10 @@ private:
 
 	/**
 	 * @class MessageQueue
-	 * @brief A queue class which can be used by multiple threads.
+	 * @brief A queue class which can be used by multiple threads. This type
+	 * of queue is known as a blocking queue which blocks if the popFront()
+	 * method is called for an empty queue until another process pushes an
+	 * element in the queue.
 	 */
 	class MessageQueue {
 
@@ -263,7 +322,7 @@ private:
 		}cond_var_;
 
 		bool enabled_;
-	};
+	}; // end of MessageQueue
 
 	Thread *this_thread_;
 
@@ -282,9 +341,6 @@ private:
 	bool exit_;
 
 };
-
-
-
 
 } /* namespace soundalchemy */
 #endif /* DSPSERVER_H_ */

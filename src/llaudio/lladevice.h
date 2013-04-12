@@ -31,7 +31,7 @@ public:
 	typedef llaContainer<TStreamId, TOStreamListElement> OStreamList;
 	typedef OStreamList::Iterator OStreamIterator;
 
-	typedef llaAudioBuffer::TSampleFormat TSampleFormat;
+	typedef llaAudioPipe::TSampleFormat TSampleFormat;
 
 public:
 

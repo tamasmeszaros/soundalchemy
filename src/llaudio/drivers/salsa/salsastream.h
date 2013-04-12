@@ -64,22 +64,22 @@ public:
 
 
 	/* implementable methods from llaInputStream: */
-	TErrors read(llaAudioBuffer& buffer);
+	TErrors read(llaAudioPipe& buffer);
 
 	/* implementable methods from llaOutputStream: */
-	TErrors write(llaAudioBuffer& buffer);
+	TErrors write(llaAudioPipe& buffer);
 
-	TErrors connect( llaOutputStream* output, llaAudioBuffer& buffer);
+	TErrors connect( llaOutputStream* output, llaAudioPipe& buffer);
 
 private:
 	TErrors _open(int mode);
-	static snd_pcm_format_t lla2alsaFormat(llaAudioBuffer::TSampleFormat format);
-	static const llaAudioBuffer::TSampleFormat alsa2llaFormat(snd_pcm_format_t format);
+	static snd_pcm_format_t lla2alsaFormat(llaAudioPipe::TSampleFormat format);
+	static const llaAudioPipe::TSampleFormat alsa2llaFormat(snd_pcm_format_t format);
 
 	//static void onCaptureComplete(snd_async_handler_t *ahandler);
 
 	void refreshState(void);
-	TErrors updateSettings(llaAudioBuffer& buffer);
+	TErrors updateSettings(llaAudioPipe& buffer);
 
 	std::string name_;
 	std::string id_;
@@ -96,8 +96,6 @@ private:
 	snd_pcm_format_t format_;
 	snd_pcm_uframes_t buffer_size_;
 	snd_pcm_access_t organization_;
-
-	bool buffer_native_;
 
 
 	TState pcm_state_;

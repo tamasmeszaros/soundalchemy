@@ -40,6 +40,8 @@ SalsaDriver::~SalsaDriver() {
 TErrors SalsaDriver::detectDevices() {
 
 	devlist_->clear();
+	istreamcache_.clear();
+	ostreamcache_.clear();
 
 #ifdef USE_EXCEPTIONS
 	TErrors e = E_OK;

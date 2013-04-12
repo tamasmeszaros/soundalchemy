@@ -42,7 +42,7 @@ class llaStream;
 class llaInputStream;
 class llaOutputStream;
 class llaFileStream;
-class llaAudioBuffer;
+class llaAudioPipe;
 class llaDeviceManager;
 
 class llaNullDevice;
@@ -130,7 +130,7 @@ const TSampleRate SR_PROFESSIONAL_96000 = 96000;
 const TSampleRate SR_DEFAULT = SR_CD_QUALITY_44100;
 const TStreamId STREAM_ID_DEFAULT = 0;
 const TDrivers DEFAULT_DRIVER = DRIVER_SALSA;
-const TSize DEFAULT_BUFFER_SIZE = 256;
+const TSize DEFAULT_BUFFER_SIZE = 512;
 const TChannels CH_DEFAULT = CH_MONO;
 
 extern llaNullDevice LLA_NULL_DEVICE;

@@ -92,7 +92,7 @@ class Pthread: public Thread {
 
 public:
 
-	Pthread() {
+	Pthread(): Thread() {
 		thread_ = -1;
 		pthread_cond_init(&wait_cond_, NULL);
 		pthread_attr_init(&thread_attr_);

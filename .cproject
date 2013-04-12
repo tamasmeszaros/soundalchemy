@@ -40,8 +40,8 @@
 							<tool id="cdt.managedbuild.tool.gnu.cpp.linker.exe.debug.959592308" name="GCC C++ Linker" superClass="cdt.managedbuild.tool.gnu.cpp.linker.exe.debug">
 								<option id="gnu.cpp.link.option.libs.317955255" name="Libraries (-l)" superClass="gnu.cpp.link.option.libs" valueType="libs">
 									<listOptionValue builtIn="false" value="pthread"/>
-									<listOptionValue builtIn="false" value="asound"/>
 									<listOptionValue builtIn="false" value="jsoncpp"/>
+									<listOptionValue builtIn="false" value="asound"/>
 								</option>
 								<option id="gnu.cpp.link.option.paths.1072103980" name="Library search path (-L)" superClass="gnu.cpp.link.option.paths" valueType="libPaths">
 									<listOptionValue builtIn="false" value="&quot;${workspace_loc:/soundalchemy/external/lib/x86_linux}&quot;"/>

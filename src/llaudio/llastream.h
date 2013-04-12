@@ -36,7 +36,7 @@ class llaStream {
 protected:
 
 	/// Sample format type shortcut
-	typedef llaAudioBuffer::TSampleFormat TSampleFormat;
+	typedef llaAudioPipe::TSampleFormat TSampleFormat;
 
 public:
 
@@ -148,45 +148,25 @@ protected:
 
 
 	////////////////////////////////////////////////////////////////////////////
-	/// Functions for manipulating an llaAudioBuffer object's private properties
+	/// Functions for manipulating an llaAudioPipe object's private properties
 	////////////////////////////////////////////////////////////////////////////
 
 
-	static void getRawBuffers(llaAudioBuffer& buffer, char **iraw,
+	static void getRawInputBuffers(llaAudioPipe& buffer, char **iraw,
 			char ***niraw);
 
-	static void setBufferOrganization(llaAudioBuffer& buffer,
-			llaAudioBuffer::TSampleOrg org);
+	static void getRawOutputBuffers(llaAudioPipe& buffer, char **iraw,
+				char ***niraw);
 
-	static llaAudioBuffer::TSampleOrg getBufferOrganization(
-			llaAudioBuffer& buffer);
 
-	static TSampleFormat getBufferFormat(llaAudioBuffer& buffer) {
-		return buffer.getFormat();
-	}
-
-	static void setBufferFormat(llaAudioBuffer& buffer, TSampleFormat format) {
-		buffer.setFormat(format);
-
-	}
-
-	static void setBufferChannels(llaAudioBuffer& buffer, TChannels channels) {
-		buffer.setChannels(channels);
-	}
-
-	static void setBufferLastWrite(llaAudioBuffer& buffer, TSize frames) {
+	static void setBufferLastWrite(llaAudioPipe& buffer, TSize frames) {
 		buffer.lastwrite_ = frames;
 	}
 
-	static TSize getBufferLastWrite(llaAudioBuffer& buffer) {
+	static TSize getBufferLastWrite(llaAudioPipe& buffer) {
 		return buffer.lastwrite_;
 	}
 
-	static void allocBuffer(llaAudioBuffer& buffer) { buffer.alloc(); }
-
-	static bool isBufferAlloced(llaAudioBuffer& buffer) {
-		return buffer.buffer_alloced_;
-	}
 };
 
 /**
@@ -200,7 +180,7 @@ public:
 	 * @param buffer An llaAudioBuffer type object which stores the samples.
 	 * @return Returns E_OK or an error code when on failure.
 	 */
-	virtual TErrors read(llaAudioBuffer& buffer) = 0;
+	virtual TErrors read(llaAudioPipe& buffer) = 0;
 
 	/**
 	 * Connects the input stream with an output stream making them ready for
@@ -210,7 +190,7 @@ public:
 	 * @param buffer An llaAudioBuffer object as the connecting buffer.
 	 * @return Returns E_OK or an error code when on failure.
 	 */
-	virtual TErrors connect( llaOutputStream* output, llaAudioBuffer& buffer);
+	virtual TErrors connect( llaOutputStream* output, llaAudioPipe& buffer);
 
 
 	/// Default destructor, does nothing.
@@ -230,7 +210,7 @@ public:
 	 * @param buffer Buffer holding the audio data.
 	 * @return Returns E_OK or an error code when on failure.
 	 */
-	virtual TErrors write(llaAudioBuffer& buffer) = 0;
+	virtual TErrors write(llaAudioPipe& buffer) = 0;
 
 
 	/// Default destructor, does nothing.
@@ -274,8 +254,8 @@ public:
 	virtual TSampleRate getSampleRate(void);
 	virtual TChannels getChannelCount(void);
 
-	virtual TErrors write(llaAudioBuffer& buffer);
-	virtual TErrors read(llaAudioBuffer& buffer);
+	virtual TErrors write(llaAudioPipe& buffer);
+	virtual TErrors read(llaAudioPipe& buffer);
 
 protected:
 
@@ -313,10 +293,10 @@ class llaNullStream: public llaInputStream, public llaOutputStream {
 	TSampleRate getSampleRate(void) {return 0;}
 	TChannels getChannelCount(void) { return CH_NONE; }
 
-	TErrors write(llaAudioBuffer& buffer) { return E_OK;}
-	TErrors read(llaAudioBuffer& buffer) { return E_OK; }
+	TErrors write(llaAudioPipe& buffer) { return E_OK;}
+	TErrors read(llaAudioPipe& buffer) { return E_OK; }
 
-	TErrors connect( llaOutputStream* output, llaAudioBuffer& buffer) {
+	TErrors connect( llaOutputStream* output, llaAudioPipe& buffer) {
 		return E_STREAM_INCOMPATIBLE;
 	}
 

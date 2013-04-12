@@ -39,10 +39,8 @@ SalsaStream::SalsaStream(const char* name, const char * id, int card_number,
 
 	rate_ = SR_CD_QUALITY_44100;
 	channels_ = CH_STEREO;
-	format_ = lla2alsaFormat(llaAudioBuffer::FORMAT_DEFAULT);
+	format_ = lla2alsaFormat(llaAudioPipe::FORMAT_DEFAULT);
 	buffer_size_ = 0;
-
-	buffer_native_ = true;
 }
 
 SalsaStream::~SalsaStream() {
@@ -105,18 +103,20 @@ TErrors SalsaStream::_open(int mode) {
 }
 
 TErrors SalsaStream::open(void) {
-	return _open(0);
+	TErrors ret;
+	if(direction_ == OUTPUT_STREAM) ret = _open(SND_PCM_NONBLOCK);
+	else ret = _open(0);
+	return ret;
 }
 
 void SalsaStream::close() {
 
 	if(pcm_state_ != CLOSED) snd_pcm_close(pcm_);
 	pcm_state_ = CLOSED;
-	//setup_ = false;
 }
 
 const char* SalsaStream::getName(void) {
-	return this->name_.c_str();
+	return this->id_.c_str();
 }
 
 int SalsaStream::getId(void) {
@@ -147,11 +147,11 @@ snd_pcm_format_t SalsaStream::lla2alsaFormat(TSampleFormat format){
 	return SND_PCM_FORMAT_UNKNOWN;
 }
 
-const llaAudioBuffer::TSampleFormat SalsaStream::alsa2llaFormat(snd_pcm_format_t format) {
+const llaAudioPipe::TSampleFormat SalsaStream::alsa2llaFormat(snd_pcm_format_t format) {
 	TSampleFormat ret;
 	switch(format) {
 	default:
-		ret = llaAudioBuffer::FORMAT_DEFAULT;
+		ret = llaAudioPipe::FORMAT_DEFAULT;
 		break;
 	}
 	return ret;
@@ -230,7 +230,7 @@ TChannels SalsaStream::getChannelCount(void) {
 
 
 
-TErrors SalsaStream::read(llaAudioBuffer& buffer) {
+TErrors SalsaStream::read(llaAudioPipe& buffer) {
 	if(pcm_state_ == CLOSED) {
 		LOGGER().warning(E_READ_STREAM, "Attempt to write to a closed stream.");
 		return E_READ_STREAM;
@@ -242,7 +242,7 @@ TErrors SalsaStream::read(llaAudioBuffer& buffer) {
 
 	char *iraw, **niraw;
 	int rc;
-	getRawBuffers(buffer, &iraw, &niraw);
+	getRawInputBuffers(buffer, &iraw, &niraw);
 
 //	snd_pcm_start(pcm_);
 //	if ((snderr = snd_pcm_wait (pcm_, -1)) < 0) {
@@ -304,17 +304,20 @@ void SalsaStream::refreshState(void) {
 	}
 }
 
-TErrors SalsaStream::updateSettings(llaAudioBuffer& buffer) {
+TErrors SalsaStream::updateSettings(llaAudioPipe& buffer) {
 
 	refreshState();
 
-	llaAudioBuffer::TSampleOrg org;
+	llaAudioPipe::TSampleOrg org;
 	int err;
 
 	snd_pcm_uframes_t sndframes = buffer.getBufferLength();
 	snd_pcm_access_t acc_required;
 
-	TSampleFormat format = getBufferFormat(buffer);
+	TSampleFormat format;
+	if(direction_ == INPUT_STREAM) { format = buffer.getInputBuffer().formatRequested; }
+	else  { format = buffer.getOutputBuffer().formatRequested; }
+
 	snd_pcm_format_t sndformat = lla2alsaFormat(format);
 
 	switch(pcm_state_) {
@@ -329,9 +332,12 @@ TErrors SalsaStream::updateSettings(llaAudioBuffer& buffer) {
 		// /////////////////////////////////////////////////////////////////////
 		// set buffer organization: interleaved/non_interleaved
 		// The llaAudioBuffer object's setting has priority
-		org = getBufferOrganization(buffer);
+		if(direction_ == INPUT_STREAM)
+			org = buffer.getInputBuffer().organizationRequested;
+		else
+			org = buffer.getOutputBuffer().organizationRequested;
 
-		acc_required = (org == llaAudioBuffer::INTERLEAVED)?
+		acc_required = (org == llaAudioPipe::INTERLEAVED)?
 				SND_PCM_ACCESS_RW_INTERLEAVED:SND_PCM_ACCESS_RW_NONINTERLEAVED;
 
 
@@ -340,8 +346,8 @@ TErrors SalsaStream::updateSettings(llaAudioBuffer& buffer) {
 
 		if(err ) {
 			// cannot set required access mode, hmm hmm, try to convert
-			// the buffer data organization in the write method or update
-			// buffer organization if this is an input stream
+			// the buffer data organization or update  buffer organization if
+			// this is an input stream
 			acc_required = (acc_required==SND_PCM_ACCESS_RW_NONINTERLEAVED)?
 					SND_PCM_ACCESS_RW_INTERLEAVED:SND_PCM_ACCESS_RW_NONINTERLEAVED;
 
@@ -349,11 +355,16 @@ TErrors SalsaStream::updateSettings(llaAudioBuffer& buffer) {
 					acc_required);
 			CHECK_SNDERROR(err, E_STREAM_CONFIG);
 
+			llaAudioPipe::TSampleOrg org_required =
+					(acc_required==SND_PCM_ACCESS_RW_NONINTERLEAVED)?
+					llaAudioPipe::NON_INTERLEAVED:llaAudioPipe::INTERLEAVED;
+
 			if(direction_ == INPUT_STREAM) {
-				setBufferOrganization(buffer, llaAudioBuffer::INTERLEAVED);
-			} else { buffer_native_ = false; }
-
-
+				buffer.getInputBuffer().organizationRequested = org_required;
+			} else {
+				//buffer.getOutputBuffer().convertOrganization(org_required);
+				buffer.getOutputBuffer().organizationRequested = org_required;
+			}
 		}
 		organization_ = acc_required;
 
@@ -366,26 +377,35 @@ TErrors SalsaStream::updateSettings(llaAudioBuffer& buffer) {
 		if(err) {
 			// TODO find a format supported by the engine and convert the
 			// buffer data if this is an output stream, but for now
-			if(direction_ == INPUT_STREAM) {
-				// set the closest format to required and set the buffer to this
-				if(format.isFloating()) {
-					if( format.getBits() <= 32 ) {
-						// set something signed 16
-						sndformat = SND_PCM_FORMAT_S16;
-						err = snd_pcm_hw_params_set_format(pcm_, hw_config_,
-								sndformat);
-						setBufferFormat(buffer, llaAudioBuffer::FORMAT_S16);
 
+			// set the closest format to required and set the buffer to this
+			if(format.isFloating()) {
+				if( format.getBits() <= 32 ) {
+					// set something signed 16
+					sndformat = SND_PCM_FORMAT_S16;
+					err = snd_pcm_hw_params_set_format(pcm_, hw_config_,
+							sndformat);
+					if(direction_ == INPUT_STREAM) {
+						buffer.getInputBuffer().formatRequested = llaAudioPipe::FORMAT_S16;
 					}
 					else {
-						sndformat = SND_PCM_FORMAT_S32;
-						err = snd_pcm_hw_params_set_format(pcm_, hw_config_,
-								sndformat);
-						setBufferFormat(buffer, llaAudioBuffer::FORMAT_S32);
+						buffer.getOutputBuffer().formatRequested = llaAudioPipe::FORMAT_S16;
 					}
-					CHECK_SNDERROR(err, E_STREAM_CONFIG);
 				}
+				else {
+					sndformat = SND_PCM_FORMAT_S32;
+					err = snd_pcm_hw_params_set_format(pcm_, hw_config_,
+							sndformat);
+					if(direction_ == INPUT_STREAM) {
+						buffer.getInputBuffer().formatRequested = llaAudioPipe::FORMAT_S32;
+					}
+					else {
+						buffer.getOutputBuffer().formatRequested = llaAudioPipe::FORMAT_S32;
+					}
+				}
+				CHECK_SNDERROR(err, E_STREAM_CONFIG);
 			}
+
 
 			if(err) {
 				LOGGER().warning(E_BUFFER_DISMATCH, "Pcm format not supported");
@@ -401,11 +421,13 @@ TErrors SalsaStream::updateSettings(llaAudioBuffer& buffer) {
 		// set buffer's channel number: the stream's configuration has priority,
 		// the buffer is up-mixed or down-mixed by it's methods
 
-		if(buffer.getChannels() != channels_ ) {
-			if(direction_ == OUTPUT_STREAM) {
-				buffer.changeChannelCount(channels_);
-			} else {
-				setBufferChannels(buffer, channels_);
+		if(direction_ == OUTPUT_STREAM) {
+			if(buffer.getOutputBuffer().channelsRequested != channels_) {
+				buffer.getOutputBuffer().changeChannelCount(channels_);
+			}
+		} else {
+			if(buffer.getInputBuffer().channelsRequested != channels_) {
+				buffer.getInputBuffer().channelsRequested = channels_;
 			}
 		}
 
@@ -421,13 +443,10 @@ TErrors SalsaStream::updateSettings(llaAudioBuffer& buffer) {
 		err = snd_pcm_hw_params_set_period_size_near(pcm_, hw_config_,
 				&sndframes, NULL);
 
-//		err = snd_pcm_hw_params_set_periods(pcm_, hw_config_, 4, 0);
-//		CHECK_SNDERROR(err, E_STREAM_CONFIG);
-
 		// write settings //////////////////////////////////////////////////////
-		if(direction_ == INPUT_STREAM) {
-			allocBuffer(buffer);
-		}
+		if(direction_ == INPUT_STREAM)  buffer.getInputBuffer().alloc();
+		else buffer.getOutputBuffer().alloc();
+
 		snd_pcm_hw_params(pcm_, hw_config_);
 		err = snd_pcm_hw_params_get_period_size(hw_config_, &sndframes, NULL);
 		CHECK_SNDERROR(err, E_STREAM_CONFIG);
@@ -456,7 +475,7 @@ TErrors SalsaStream::updateSettings(llaAudioBuffer& buffer) {
 	return E_OK;
 }
 
-TErrors SalsaStream::write(llaAudioBuffer& buffer) {
+TErrors SalsaStream::write(llaAudioPipe& buffer) {
 
 	if(pcm_state_ == CLOSED) {
 		LOGGER().warning(E_WRITE_STREAM, "Attempt to write to a closed stream.");
@@ -466,9 +485,12 @@ TErrors SalsaStream::write(llaAudioBuffer& buffer) {
 	TErrors err;
 	if( (err = updateSettings(buffer)) != E_OK) return err;
 
+	buffer.onSamplesReady();
+
 	char *iraw, **niraw;
 	int rc;
-	getRawBuffers(buffer, &iraw, &niraw);
+
+	getRawOutputBuffers(buffer, &iraw, &niraw);
 
 	TSize frames_to_deliver = getBufferLastWrite(buffer);
 	if( frames_to_deliver <= 0 || frames_to_deliver > buffer_size_)
@@ -494,13 +516,7 @@ TErrors SalsaStream::write(llaAudioBuffer& buffer) {
 	return E_OK;
 }
 
-struct AsyncData {
-	llaAudioBuffer *buffer;
-	llaOutputStream *output;
-	SalsaStream *self;
-};
-
-TErrors SalsaStream::connect( llaOutputStream* output, llaAudioBuffer& buffer) {
+TErrors SalsaStream::connect( llaOutputStream* output, llaAudioPipe& buffer) {
 	TErrors ret = _open(SND_PCM_NONBLOCK);
 
 	if( ret != E_OK || (ret = updateSettings(buffer)) != E_OK ) return ret;
@@ -533,7 +549,7 @@ TErrors SalsaStream::connect( llaOutputStream* output, llaAudioBuffer& buffer) {
 
 	char *iraw, **niraw;
 
-	while(!buffer.stop()) {
+	while(!buffer.stop() && !buffer.fail()) {
 		snd_pcm_start(pcm_);
 		if ((err = snd_pcm_wait (pcm_, -1)) < 0) {
 				//LOGGER().warning(E_READ_STREAM, "Polling failed");
@@ -547,7 +563,7 @@ TErrors SalsaStream::connect( llaOutputStream* output, llaAudioBuffer& buffer) {
 		if(frames <=0 || frames > buffer_size_) frames = buffer_size_;
 
 		int rc;
-		getRawBuffers( buffer, &iraw, &niraw);
+		getRawInputBuffers( buffer, &iraw, &niraw);
 
 
 		if(organization_ == SND_PCM_ACCESS_RW_NONINTERLEAVED) {
@@ -557,7 +573,8 @@ TErrors SalsaStream::connect( llaOutputStream* output, llaAudioBuffer& buffer) {
 			rc = snd_pcm_readi(pcm_, (void*)iraw, frames);
 		}
 
-		setBufferLastWrite(buffer, rc);
+		TSize lastwrite = ((TSize)rc <= buffer.getBufferLength())?rc : buffer.getBufferLength();
+		setBufferLastWrite(buffer, lastwrite);
 		if (rc == -EPIPE) {
 		  /* EPIPE means underrun */
 		  snd_pcm_prepare(pcm_);
@@ -570,7 +587,9 @@ TErrors SalsaStream::connect( llaOutputStream* output, llaAudioBuffer& buffer) {
 			return E_READ_STREAM;
 		}
 
-		buffer.onSamplesReady();
+		//buffer.onSamplesReady();
+		if(buffer.fail()) return E_BUFFER_DISMATCH;
+
 		if( (ret = output->write(buffer))!= E_OK ) {
 			snd_pcm_sw_params_free(sw_config_);
 			close();

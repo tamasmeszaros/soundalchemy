@@ -31,6 +31,15 @@ typedef enum {
 } TStreamDirection;
 
 /**
+ * @brief The server's state is in one of these states
+ */
+typedef enum e_states
+{
+	ST_STOPPED,         //!< The processing thread is completely killed.
+	ST_RUNNING          //!< Processing is in progress.
+} TProcessingState;
+
+/**
  * @brief Base class for a Message
  *
  * Sound Alchemy can be built as a stand-alone service and the communication
@@ -66,7 +75,8 @@ protected:
 		MSG_SET_EFFECT_PARAM,   //!< Set a parameter of a specific effect
 		MSG_GET_EFFECT_PARAM,	//!< Get a parameter of a specific effect
 		MSG_GET_STATE,          //!< Obtain the processing state
-		MSG_SEND_CLIENT_ID,     //!< Sending a channelID to a new client
+		MSG_SEND_CLIENT_ID,     //!< Sending a channel id to a new client
+		MSG_CLIENT_OUT
 	} TMessageType;
 
 public:
@@ -78,7 +88,7 @@ public:
 	static const TChannelID ALCHEMY_SERVER;
 
 private:
-	TChannelID channel_;
+	TChannelID channel_id_;
 
 public:
 
@@ -96,20 +106,20 @@ public:
 	 * @param channel An optional ID of the sender front-end. If points to
 	 * Alchemy Server if omitted.
 	 */
-	Message():channel_(ALCHEMY_SERVER) {}
+	Message():channel_id_(ALCHEMY_SERVER) {}
 	virtual ~Message() {}
 
 	/**
 	 * @brief Get the ID of the sender front-end.
 	 * @return Returns a TChannel value.
 	 */
-	TChannelID getChannelId(void) { return channel_; }
+	TChannelID getChannelId(void) { return channel_id_; }
 
 	/**
 	 * @brief Get the ID of the sender front-end.
 	 * @param channel
 	 */
-	virtual void setChannelId(TChannelID channel) { channel_ = channel; }
+	virtual void setChannelId(TChannelID channel) { channel_id_ = channel; }
 
 };
 
@@ -128,9 +138,11 @@ public:
 	static OutboundMessage* AckStart( const char* error);
 	static OutboundMessage* AckStop( const char* error );
 	static OutboundMessage* AckExit( void );
-	static OutboundMessage* AckGetStream(llaudio::TDeviceId device_name,
+	static OutboundMessage* AckGetStream( llaudio::TDeviceId device_name,
 			llaudio::TStreamId id, TStreamDirection direction);
-	static OutboundMessage* AckSetStream(const char* error);
+	static OutboundMessage* AckSetStream( const char* error);
+	static OutboundMessage* AckGetState( TProcessingState state);
+	static OutboundMessage* AckClientOut( void );
 
 
 	virtual ~OutboundMessage() {}
@@ -150,7 +162,7 @@ public:
 
 	virtual void setChannelId(TChannelID chid) {
 		Message::setChannelId(chid);
-		dataroot_["channelID"] = getChannelId();
+		dataroot_["channel_id"] = getChannelId();
 	}
 
 protected:
@@ -158,7 +170,7 @@ protected:
 	OutboundMessage(TMessageType reply_for):
 		ack_for_(reply_for) {
 		dataroot_["type"] = MSG_ACK;
-		dataroot_["channelID"] = getChannelId();
+		dataroot_["channel_id"] = getChannelId();
 		dataroot_["ack_for"] = reply_for;
 	}
 
@@ -166,6 +178,10 @@ protected:
 
 /**
  * @brief Base class for incoming messages
+ *
+ * For every constant in TMessageType a subclass of InboundMessage is defined
+ * with specific operation on the server. This operation is implemented in the
+ * instruct method.
  */
 class InboundMessage: public Message {
 	OutboundMessage* reply_;
@@ -175,6 +191,9 @@ protected:
 public:
 	InboundMessage() { reply_ = NULL; }
 
+	/// Public input message initializers.
+	static InboundMessage* newMsgClientOut();
+
 	virtual ~InboundMessage() { delete reply_; }
 
 	/**
@@ -182,7 +201,7 @@ public:
 	 *
 	 * This method has a key role in the communication mechanism. An incoming
 	 * message represents a command to a DspServer. The method has to be invoked
-	 * to run this this command on a specific DspServer object.
+	 * to run this command on a specific DspServer object.
 	 *
 	 * Subclasses have to implement this method by returning their appropriate
 	 * outgoing message which has to be a subclass of OutboundMessage
@@ -207,51 +226,6 @@ public:
 
 	virtual bool isExitMessage(void) { return false; }
 };
-
-////////////////////////////////////////////////////////////////////////////////
-/// Message types:
-/// Each message type defines an incoming (InboundMessage) and an outgoing
-/// (OutboundMessage) message subclass.
-////////////////////////////////////////////////////////////////////////////////
-
-// MSG_START ///////////////////////////////////////////////////////////////////
-//
-
-/**
- * @brief Incoming MSG_START message
- */
-class MsgStart: public InboundMessage {
-public:
-	virtual OutboundMessage* instruct(DspServer& server);
-};
-
-// MSG_STOP ////////////////////////////////////////////////////////////////////
-//
-
-/**
- * @brief Incoming MSG_STOP message
- */
-class MsgStop: public InboundMessage {
-public:
-	OutboundMessage* instruct(DspServer& server);
-
-};
-
-// MSG_EXIT ////////////////////////////////////////////////////////////////////
-//
-
-/**
- * @brief Incoming MSG_EXIT message
- */
-class MsgExit: public InboundMessage {
-public:
-	OutboundMessage* instruct(DspServer& server);
-
-	bool isExitMessage(void) { return true; }
-};
-
-// MSG_GET_DEVICE_LIST /////////////////////////////////////////////////////////
-//
 
 /**
  * @brief Definition of a data structure interface for the audio devices
@@ -360,67 +334,7 @@ public:
 
 };
 
-/**
- * @brief Outgoing MSG_GET_DEVICE_LIST message
- */
-class OutboundMsgDeviceList: public OutboundMessage, public AudioInf {
-	MsgDataStore current_device_;
-public:
-	OutboundMsgDeviceList(): OutboundMessage(MSG_GET_DEVICE_LIST) {}
 
-	virtual void beginDevice(const char* name, const char* fullname);
-
-	virtual void stream(int id, const char* name, bool input);
-
-	virtual void endDevice();
-
-};
-
-/**
- * @brief Incoming MSG_GET_DEVICE_LIST message
- */
-class MsgDeviceList: public InboundMessage {
-public:
-	OutboundMessage* instruct(DspServer& server);
-};
-
-// MSG_SEND_CLIENT_ID //////////////////////////////////////////////////////////
-
-class MsgClientID: public OutboundMessage {
-	TChannelID new_client_;
-public:
-	MsgClientID(TChannelID new_client):
-		OutboundMessage(MSG_UNINITIALIZED),
-		new_client_(new_client) {
-		dataroot_["type"] = MSG_SEND_CLIENT_ID;
-		dataroot_["clientID"] = (TChannelID) new_client_;
-	}
-};
-
-// MSG_SET_INPUT_STREAM ////////////////////////////////////////////////////////
-//
-
-class MsgGetStream: public InboundMessage {
-	TStreamDirection direction_;
-public:
-	MsgGetStream(TStreamDirection direction) : direction_(direction) {}
-
-	OutboundMessage* instruct(DspServer& server);
-};
-
-// MSG_SET_INPUT_STREAM ////////////////////////////////////////////////////////
-//
-
-class MsgSetStream: public InboundMessage {
-	std::string device_name_;
-	int id_;
-	TStreamDirection direction_;
-public:
-	MsgSetStream(const char* device_name, int id, TStreamDirection dir):
-		device_name_(device_name), id_(id), direction_(dir) {}
-
-	OutboundMessage* instruct(DspServer& server);
-};
 
 
 } /* namespace soundalchemy */

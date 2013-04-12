@@ -32,6 +32,10 @@ InboundMessage* AndroidConnector::read(void) {
 	InboundMessage* dest_msg =
 			InboundMessage::unserialize(Message::PROTOCOL_JSON, cin, ENDCHAR);
 
+	if(cin.fail()) {
+		dest_msg = InboundMessage::newMsgClientOut();
+	}
+
 	if(dest_msg == NULL) {
 		log(LEVEL_WARNING, STR_ERRORS[E_READ]);
 	}

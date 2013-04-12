@@ -18,14 +18,14 @@ using namespace std;
 #define ID_DATA 0x61746164
 
 TErrors
-llaInputStream::connect( llaOutputStream* output, llaAudioBuffer& buffer) {
+llaInputStream::connect( llaOutputStream* output, llaAudioPipe& buffer) {
 	TErrors ret = E_OK;
 	ret = this->open();
 	ret = output->open();
 	if(getSampleRate() != output->getSampleRate()) {
 		LOGGER().warning(E_STREAM_INCOMPATIBLE, "Sampling rate not equivalent");
 	}
-	while(!buffer.stop() && ret == E_OK) {
+	while(!buffer.stop() && ret == E_OK && !buffer.fail()) {
 		if(ret == E_OK) {
 			ret = read(buffer);
 			if(ret != E_OK) break;
@@ -39,23 +39,16 @@ llaInputStream::connect( llaOutputStream* output, llaAudioBuffer& buffer) {
 	return ret;
 }
 
-void llaStream::getRawBuffers(llaAudioBuffer& buffer, char **iraw, char ***niraw) {
-	if(iraw != NULL) *iraw = buffer.iraw_;
-	if(niraw != NULL ) *niraw = buffer.niraw_;
+void llaStream::getRawInputBuffers(llaAudioPipe& buffer, char **iraw, char ***niraw) {
+	if(iraw != NULL) *iraw = buffer.getInputBuffer().iraw_;
+	if(niraw != NULL ) *niraw = buffer.getInputBuffer().niraw_;
 }
 
-void llaStream::setBufferOrganization(llaAudioBuffer& buffer,
-			llaAudioBuffer::TSampleOrg org){
-
-//	TSize frames = buffer.getBufferLength();
-//	buffer.clear();
-	buffer.sampleorg_ = org;
+void llaStream::getRawOutputBuffers(llaAudioPipe& buffer, char **iraw, char ***niraw) {
+	if(iraw != NULL) *iraw = buffer.getOutputBuffer().iraw_;
+	if(niraw != NULL ) *niraw = buffer.getOutputBuffer().niraw_;
 }
 
-llaAudioBuffer::TSampleOrg
-llaStream::getBufferOrganization(llaAudioBuffer& buffer) {
-	return buffer.sampleorg_;
-}
 
 llaudio::llaFileStream::llaFileStream(const char* file) {
 	filename_ = file;
@@ -144,7 +137,7 @@ TChannels llaudio::llaFileStream::getChannelCount(void) {
 	return (TChannels) wave_info_.num_channels;
 }
 
-TErrors llaudio::llaFileStream::read(llaAudioBuffer& buffer) {
+TErrors llaudio::llaFileStream::read(llaAudioPipe& buffer) {
 	if ( file_ == NULL ) {
 		LOGGER().error(E_READ_STREAM, "Stream closed!");
 		return E_READ_STREAM;
@@ -155,29 +148,29 @@ TErrors llaudio::llaFileStream::read(llaAudioBuffer& buffer) {
 	}
 
 	bool change = false;
-	if(buffer.getChannels() != getChannelCount()) {
-		setBufferChannels(buffer, getChannelCount());
+	if(buffer.getInputBuffer().channelsRequested != getChannelCount()) {
+		buffer.getInputBuffer().channelsRequested = getChannelCount();
 		change = true;
 	}
 
 
-	TSampleFormat fmt = getBufferFormat(buffer);
-	llaAudioBuffer::TSampleOrg org = getBufferOrganization(buffer);
+	TSampleFormat fmt = buffer.getInputBuffer().formatRequested;
+	llaAudioPipe::TSampleOrg org = buffer.getInputBuffer().organizationRequested;
 	if(fmt.isFloating() || !fmt.isLittleEndian() || !fmt.isSigned() ||
 			fmt.getBits() != wave_info_.bits_per_sample ) {
 		if(wave_info_.bits_per_sample <= 16) {
-			setBufferFormat(buffer, llaAudioBuffer::FORMAT_S16LE);
-		} else setBufferFormat(buffer, llaAudioBuffer::FORMAT_S32LE);
+			buffer.getInputBuffer().formatRequested = llaAudioPipe::FORMAT_S16LE;
+		} else buffer.getInputBuffer().formatRequested = llaAudioPipe::FORMAT_S32LE;
 
-		if(org != llaAudioBuffer::INTERLEAVED)
-			setBufferOrganization(buffer, llaAudioBuffer::INTERLEAVED);
+		if(org != llaAudioPipe::INTERLEAVED)
+			buffer.getInputBuffer().organizationRequested = llaAudioPipe::INTERLEAVED;
 		change = true;
 	}
 
-	if(change || !isBufferAlloced(buffer)) allocBuffer(buffer);
+	if(change || !buffer.getInputBuffer().isAlloced()) buffer.getInputBuffer().alloc();
 
 	char* iraw;
-	getRawBuffers(buffer, &iraw, NULL);
+	getRawInputBuffers(buffer, &iraw, NULL);
 
 	TSize frames = buffer.getBufferLength();
 	TSize bytes = wave_info_.bits_per_sample*wave_info_.num_channels/8;
@@ -189,7 +182,7 @@ TErrors llaudio::llaFileStream::read(llaAudioBuffer& buffer) {
 }
 
 
-TErrors  llaudio::llaFileStream::write(llaAudioBuffer& buffer) {
+TErrors  llaudio::llaFileStream::write(llaAudioPipe& buffer) {
 	return E_UNIMPLEMENTED;
 }
 

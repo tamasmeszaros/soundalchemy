@@ -23,7 +23,7 @@ using namespace std;
 namespace soundalchemy {
 
 
-
+// a class for the llaDeviceManager which implements an llaErrorHandler interface
 class LLAErrorHandler: public llaErrorHandler {
 public:
 	virtual void rawlog(TErrorLevel lvl, const char* srcfile, int line,
@@ -46,38 +46,35 @@ public:
 	}
 } llaEH;
 
+// Instantiation of the device manager
 llaDeviceManager& DspServer::lla_devman_ = llaDeviceManager::getInstance(llaEH);
 
+// DspServer Constructor
 DspServer::DspServer():
 		dsp_process_(*this),
+		proc_graph_(),
 		clients_count_(0),
 		messagequeue_(NULL)
 		 {
 
+	// initialize all client connectors to NULL
 	for (int i = 0; i < CLIENTS_MAX; i++)
 		clients_[i] = NULL;
 
+	// allocate a thread object for this thread
 	this_thread_ = Thread::getCurrent();
-
-//	llaEH.enableLogging(true, true);
-//	llaEH.enableDebugMessages(true);
-//	llaEH.useExceptions(true);
-//	try {
-//		lla_devman_.setErrorHandler(llaEH);
-//	} catch (llaErrorHandler::Exception& ex) {
-//		log(LEVEL_ERROR, ex.what());
-//	}
-
-	//lla_devman_.refresh();
 }
 
+// DspServer Destructor
 DspServer::~DspServer() {
 
+	// stop the processing
 	stop();
 
 	delete this_thread_;
 	delete messagequeue_;
 
+	// destroy the llaudio device manager
 	try {
 		lla_devman_.destroy();
 	} catch (llaErrorHandler::Exception& ex) {
@@ -93,51 +90,23 @@ TAlchemyError DspServer::start() {
 	return dsp_process_.startProcessing();
 }
 
-TAlchemyError DspServer::DspProcess::startProcessing(void) {
-
-	TAlchemyError retval = E_OK;
-	lock();
-	int ret;
-	switch (state_.val) {
-	case ST_STOPPED:
-		ret = proc_thread_->run(*this);
-		if (ret) {
-			retval = E_START;
-			log(LEVEL_ERROR, STR_ERRORS[retval]);
-		}
-		waitFor();
-		break;
-	default:
-		break;
-	}
-	unlock();
-
-	if(state_.val != ST_RUNNING) {
-		log(LEVEL_ERROR, STR_ERRORS[E_START]);
-		retval = E_START;
-	}
-
-	return retval;
-}
-
-void DspServer::DspProcess::stopProcessing(void) {
-	lock(); state_.state_requested_ = ST_STOPPED; unlock();
-	Thread* current = Thread::getCurrent();
-	proc_thread_->join(*current);
-	delete current;
-}
-
-
+// The processMessage method queues up the message for further processing
 void DspServer::processMessage(InboundMessage& msg) {
 	if(messagequeue_ != NULL) messagequeue_->pushBack(&msg);
 }
 
+// Connects a ClientConnector type object with the server
 TAlchemyError DspServer::listenOn(ClientConnector& client) {
+
+	// the connection on the server side
 	clients_[clients_count_] = &client;
+
+	// make the connection on the client side
 	client.connect(*this);
 
-
+	// start the client connector to read its input
 	TAlchemyError ret = clients_[clients_count_]->watch();
+
 
 	if (ret != E_OK) {
 		log(LEVEL_ERROR,
@@ -146,9 +115,15 @@ TAlchemyError DspServer::listenOn(ClientConnector& client) {
 	}
 	else {
 		clients_count_++;
+
+		// prepare a message with the new address to the client
 		OutboundMessage* msgclientid =
 				OutboundMessage::MsgSendClientID(clients_count_);
+
+		// set up the address of the client in the clientconnector
 		client.setChannelId(clients_count_);
+
+		// send the new address to the client and delete the message
 		client.send( *msgclientid );
 		delete msgclientid;
 	}
@@ -156,8 +131,9 @@ TAlchemyError DspServer::listenOn(ClientConnector& client) {
 	return ret;
 }
 
-void DspServer::getDeviceList(AudioInf& devicelist) {
-
+// collect the information about the audio devices
+void DspServer::getDeviceList(AudioInf& devicelist, bool redetect) {
+	if(redetect) lla_devman_.refresh();
 	for( llaDeviceIterator devices = lla_devman_.getDeviceIterator(); !devices.end(); devices++) {
 		devicelist.beginDevice(devices->getName(), devices->getName(true));
 		for(llaDevice::IStreamIterator i = devices->getInputStreamIterator(); !i.end(); i++) {
@@ -172,19 +148,20 @@ void DspServer::getDeviceList(AudioInf& devicelist) {
 	}
 }
 
+// this method starts the processing of the messages from various clients
 void DspServer::startListening(void) {
 
 	InboundMessage *instruction;
 	OutboundMessage *reply;
 	exit_ = false;
 
-	// allocating the message queue facility
+	// allocating the message queue
 	if(messagequeue_ == NULL) messagequeue_ = new MessageQueue();
 
 	while(!exit_) {
 
 		// this call blocks if the queue is empty
-		// allowing a passive waiting for a message and process it. Meanwhile,
+		// allowing a passive waiting for a message and process it while
 		// other messages are buffered in the queue.
 		instruction = messagequeue_->popFront();
 		if(instruction != NULL) {
@@ -195,28 +172,106 @@ void DspServer::startListening(void) {
 	}
 }
 
+// Shut down a client connector. This means that messages from this client will
+// be no longer processed. This method is called when a Message is obtained from
+// a particular client which signals the end of its connection.
+void DspServer::clientOut(Message::TChannelID client) {
+	if( client > clients_count_ ) {
+		log(LEVEL_ERROR, STR_ERRORS[soundalchemy::E_INDEX]);
+		return;
+	}
+	else {
+		unsigned int index = client - 1;
+		clients_[index]->stopWatching();
+		delete clients_[client];
+		clients_[index] = NULL;
+		clients_count_--;
+		if(clients_count_ == 0) stopListening();
+	}
+}
+
+// Stops the processing of messages. This method is triggered by an Exit message
+// from a client.
 void DspServer::stopListening(void) {
 	stop();
 	exit_ = true;
 }
 
-DspServer::DspProcess::DspProcess(DspServer& server):
-		dspserver_(server) {
+TAlchemyError DspServer::setInputStream(TDeviceId device, TStreamId id) {
+	llaDevice& dev = lla_devman_.getDevice(device );
+	if(dev.isNull()) return E_SET_STREAM;
+
+	llaInputStream& is = dev.getInputStream(id);
+	if(is.isNull()) return E_SET_STREAM;
+
+	proc_graph_.setInput(is);
+
+	return E_OK;
+}
+
+TProcessingState DspServer::getState(void) {
+	TProcessingState tmp;
+	dsp_process_.lock();
+	tmp = dsp_process_.getState();
+	dsp_process_.unlock();
+	return tmp;
+}
+
+TAlchemyError DspServer::setOutputStream(TDeviceId device, TStreamId id) {
+	llaDevice& dev = lla_devman_.getDevice(device );
+	if(dev.isNull()) return E_SET_STREAM;
+
+	llaOutputStream& os = dev.getOutputStream(id);
+	if(os.isNull()) return E_SET_STREAM;
+
+	proc_graph_.setOutput(os);
+
+	return E_OK;
+}
+
+
+void DspServer::setBufferSize(TSize buffer_size) {
+}
+
+void DspServer::setSampleRate(TSampleRate sample_rate) {
+}
+
+void DspServer::addEffect(SoundEffect* effect) {
+}
+
+void DspServer::broadcastMessage(OutboundMessage& message) {
+	for (int i = 0; i < CLIENTS_MAX; i++) {
+		if (clients_[i] != NULL)
+			clients_[i]->send(message);
+	}
+}
+
+// DspProcess //////////////////////////////////////////////////////////////////
+//
+
+// Constructor of the DspProcess class
+DspServer::DspProcess::DspProcess(DspServer& server) :
+		dspserver_(server), proc_thread_(Thread::getNewThread()),
+		state_(proc_thread_) {
 	callback_counter_ = 0;
 	state_.val = ST_STOPPED;
 	state_.state_requested_ = ST_STOPPED;
-	proc_thread_ = Thread::getNewThread();
-	if( proc_thread_->setRealtime())
+	// try to set real time priority to the processing thread
+	if (proc_thread_->setRealtime())
 		log(LEVEL_WARNING, "Cannot set real time policy");
 
+	getInputBuffer().channelsRequested = CH_MONO;
+	getOutputBuffer().channelsRequested = CH_STEREO;
 }
 
-void * DspServer::DspProcess::run() {
+// The code which is executed on the start of the processing thread
+void* DspServer::DspProcess::run() {
 
-	lock(); state_.state_requested_ = ST_RUNNING; unlock();
-
+	lock();
+	state_.state_requested_ = ST_RUNNING;
+	unlock();
 	TErrors e = llaudio::E_OK;
-	TState st;
+	TProcessingState st;
 
 	// This thread will consume most of its life in the connectStream function
 	// in which the processing is done. It calls the onSamplesReady method
@@ -224,15 +279,75 @@ void * DspServer::DspProcess::run() {
 	e = connectStreams(dspserver_.proc_graph_.getInput(),
 			dspserver_.proc_graph_.getOutput());
 
+	// while the processing has ran the requested state could be changed
+	// but if all went right this has to be ST_STOPPED
+	lock();
+	st = state_.state_requested_;
 
-	lock(); st =  state_.state_requested_; unlock();
 
-	state_.val = (TState)(ST_STOPPED);
+	// set the actual state to ST_STOPPED
+	state_.val = (TProcessingState)((ST_STOPPED));
+
+	// If the  requested state is not equal to ST_STOPPED than the processing
+	// stopped due to an error.
 	if (e != llaudio::E_OK || st != ST_STOPPED) {
-		proc_thread_->wakeUpAll();
+		unlock();
+		proc_thread_->wakeUp();
 		log(LEVEL_ERROR, "Alchemy server stopped unexpectedly");
 	}
+	else unlock();
 	return NULL;
+}
+
+// this method starts the processing of the audio signal
+TAlchemyError DspServer::DspProcess::startProcessing(void) {
+	TAlchemyError retval = E_OK;
+	lock();
+	int ret;
+	switch (state_.val) {
+	case ST_STOPPED:
+		unlock();
+		ret = proc_thread_->run(*this);
+		if (ret) {
+			retval = E_START;
+			log(LEVEL_ERROR, STR_ERRORS[retval]);
+		}
+		lock();
+		waitFor();
+		break;
+	default:
+		break;
+	}
+
+	unlock();
+	if (state_.val != ST_RUNNING) {
+		log(LEVEL_ERROR, STR_ERRORS[E_START]);
+		retval = E_START;
+	}
+	return retval;
+}
+
+// stop the processing
+void DspServer::DspProcess::stopProcessing(void) {
+	lock();
+	state_.state_requested_ = ST_STOPPED;
+	unlock();
+	Thread* current = Thread::getCurrent();
+	proc_thread_->join(*current);
+	delete current;
+}
+
+bool DspServer::DspProcess::stop(void) {
+	bool ret = false;
+	lock();
+	if (state_.state_requested_ == ST_STOPPED) {
+		// this will break the connection of audio streams as the "bool stop()"
+		// function will return true. DspProcess::run will exit after that.
+		callback_counter_ = 0;
+		ret = true;
+	}
+	unlock();
+	return ret;
 }
 
 void DspServer::DspProcess::onSamplesReady(void) {
@@ -249,68 +364,106 @@ void DspServer::DspProcess::onSamplesReady(void) {
 		unlock();
 		return;
 	}
-	dspserver_.proc_graph_.traverse(this->lastwrite_);
-//	while ( enode != NULL ) {
-//		// don't let the signal chain parameters to change while the samples
-//		// are processed
-//		// It's important to know the expensiveness of this operation.
-//		// To lock a mutex, which is not already locked takes very little
-//		// effort on linux. ( says Stack-owerflow )
-//		lock();
-//
-//		// process the samples
-//		enode->effect->process(this->lastwrite_);
-//
-//		// give room for the main thread to change some parameters
-//		unlock();
-//
-//		enode = enode->next;
+
+#ifdef DEBUG
+	if(getInputBuffer().getChannels() == CH_NONE ||
+			getOutputBuffer().getChannels() == CH_NONE ) {
+		fail_state_ = true;
+		return;
+	}
+#endif
+
+
+	float** o_samples = getOutputBuffer().getSamples();
+	float** i_samples = getInputBuffer().getSamples();
+
+	dspserver_.proc_graph_.setInputBuffer(i_samples[0]);
+	dspserver_.proc_graph_.setOutputBuffer(o_samples[0], o_samples[1]);
+
+//  testing
+//	for(unsigned int j = 0; j < getChannels(); j++) {
+//		for(unsigned int i = 0; i < getBufferLength(); i++) {
+//			o_samples[j] [i] = i_samples[j] [i];
+//		}
 //	}
+
+	dspserver_.proc_graph_.traverse(this->lastwrite_);
+	getOutputBuffer().writeSamples();
+
 	callback_counter_++;
 }
 
-bool DspServer::DspProcess::stop(void) {
-	bool ret = false;
-	lock();
-	if (state_.state_requested_ == ST_STOPPED) {
-		// this will break the connection of audio streams as the "bool stop()"
-		// function will return true. DspProcess::run will exit after that.
-		callback_counter_ = 0;
-		ret = true;
+// Processing Graph ////////////////////////////////////////////////////////////
+//
+DspServer::Input::Input() :
+		llainput(&(lla_devman_.getDevice("RP250").getInputStream())) {
+	MixerPort* pi = new MixerPort(SoundEffect::INPUT_PORT, "input");
+	MixerPort* po = new MixerPort(SoundEffect::OUTPUT_PORT, "output");
+	addPort(pi);
+	addPort(po);
+}
+
+DspServer::Output::Output() :
+		llaoutput(&(lla_devman_.getDevice("RP250").getOutputStream())) {
+	MixerPort* pl = new MixerPort(SoundEffect::OUTPUT_PORT, "left");
+	MixerPort* pr = new MixerPort(SoundEffect::OUTPUT_PORT, "right");
+	MixerPort* pil = new MixerPort(SoundEffect::INPUT_PORT, "input_left");
+	MixerPort* pir = new MixerPort(SoundEffect::INPUT_PORT, "input_right");
+	addPort(pl);
+	addPort(pr);
+	addPort(pil);
+	addPort(pir);
+}
+
+DspServer::ProcessingGraph::ProcessingGraph() :
+		mutex_(Thread::getMutex()),
+		input_(), output_(), sample_rate_(SR_CD_QUALITY_44100) {
+
+
+//	input_.getOutputPort(0)->connect(*(output_.getInputPort(0)));
+//	input_.getOutputPort(0)->connect(*(output_.getInputPort(1)));
+
+}
+
+void DspServer::ProcessingGraph::setSampleRate() {
+	// TODO set the sample rate off all effects in a for loop
+}
+
+void  DspServer::ProcessingGraph::addEffect(SoundEffect* effect) {
+	// TODO set up connections and add the effect to the chain
+}
+
+void DspServer::ProcessingGraph::traverse(unsigned int sample_count) {
+	mutex_->lock();
+	input_.process(sample_count);
+	for (TEffectStackIt it = effectstack_.begin(); it != effectstack_.end();
+			it++) {
+		(*it)->process(sample_count);
 	}
-	unlock();
-	return ret;
+	output_.process(sample_count);
+	mutex_->unlock();
 }
 
-TAlchemyError DspServer::setInputStream(TDeviceId device, TStreamId id) {
-	llaDevice& dev = lla_devman_.getDevice(device );
-	if(dev.isNull()) return E_SET_STREAM;
+void DspServer::ProcessingGraph::setInputBuffer(SoundEffect::TSample* buffer) {
+	MixerEffect::MixerPort p(SoundEffect::INPUT_PORT, "", buffer);
 
-	llaInputStream& is = dev.getInputStream(id);
-	if(is.isNull()) return E_SET_STREAM;
+	// At this moment the processing graph is empty. The output if the
+	// entry MixerEffect (input_) is connected with the input of the final
+	// MixerEffect (output_).
+	input_.getInputPort(0)->connect(p);
+	input_.getOutputPort(0)->connect(p);
 
-	proc_graph_.setInput(is);
-
-	return E_OK;
+	output_.getInputPort(0)->connect(p);
+	output_.getInputPort(1)->connect(p);
 }
 
-TAlchemyError DspServer::setOutputStream(TDeviceId device, TStreamId id) {
-	llaDevice& dev = lla_devman_.getDevice(device );
-	if(dev.isNull()) return E_SET_STREAM;
+void DspServer::ProcessingGraph::setOutputBuffer(
+		SoundEffect::TSample* buffer_left, SoundEffect::TSample* buffer_right) {
+	MixerEffect::MixerPort left(SoundEffect::INPUT_PORT, "", buffer_left);
+	MixerEffect::MixerPort right(SoundEffect::INPUT_PORT, "", buffer_right);
+	output_.getOutputPort(0)->connect(left);
+	output_.getOutputPort(1)->connect(right);
 
-	llaOutputStream& os = dev.getOutputStream(id);
-	if(os.isNull()) return E_SET_STREAM;
-
-	proc_graph_.setOutput(os);
-
-	return E_OK;
-}
-
-
-void DspServer::broadcastMessage(OutboundMessage& message) {
-	for (int i = 0; i < CLIENTS_MAX; i++) {
-			if(clients_[i] != NULL) clients_[i]->send(message);
-	}
 }
 
 /* ************************************************************************** */
@@ -327,21 +480,21 @@ DspServer::MessageQueue::~MessageQueue() {
 	enabled_ = false;
 	cond_var_.unlock();
 	writemutex_->unlock();
-
-	// delete remaining messages
+// delete remaining messages
 	InboundMessage* temp;
-	while(!cond_var_.queue_base_.empty()) {
+	while (!cond_var_.queue_base_.empty()) {
 		temp = cond_var_.queue_base_.front();
 		delete temp;
 		cond_var_.queue_base_.pop();
 	}
-
 	delete writemutex_;
 	delete monitor_;
 }
 
 InboundMessage* DspServer::MessageQueue::popFront(void) {
-	if(!enabled_) return NULL;
+	if (!enabled_)
+		return NULL;
+
 	cond_var_.lock();
 	writemutex_->lock();
 	if (cond_var_.queue_base_.empty()) {
@@ -355,61 +508,54 @@ InboundMessage* DspServer::MessageQueue::popFront(void) {
 	InboundMessage* ret = cond_var_.queue_base_.front();
 	cond_var_.queue_base_.pop();
 	return ret;
-
 }
-
 void DspServer::MessageQueue::pushBack(InboundMessage* message) {
-	if(!enabled_) return ;
-	unsigned int waiters;
+	if (!enabled_)
+		return;
 
+	unsigned int waiters;
 	cond_var_.lock();
 	writemutex_->lock();
-		waiters = waiters_;
-		cond_var_.queue_base_.push(message);
+	waiters = waiters_;
+	cond_var_.queue_base_.push(message);
 	writemutex_->unlock();
 	cond_var_.unlock();
-
 	if (waiters > 0) {
 		if (monitor_->wakeUp()) {
 			log(LEVEL_ERROR,
-			    "%s. No thread is waiting on the queue when attempt to wake up",
-			    STR_ERRORS[E_QUEUE]);
+					"%s. No thread is waiting on the queue when attempt to wake up",
+					STR_ERRORS[E_QUEUE]);
 		} else
 			waiters_--;
 	}
-
 }
 
 unsigned int DspServer::MessageQueue::getSize(void) {
-	if(!enabled_) return 0;
-	unsigned int size;
+	if (!enabled_)
+		return 0;
 
+	unsigned int size;
 	cond_var_.lock();
 	writemutex_->lock();
-
 	size = cond_var_.queue_base_.size();
-
 	writemutex_->unlock();
 	cond_var_.unlock();
-
 	return size;
 }
-
 bool DspServer::MessageQueue::isEmpty(void) {
-	if(!enabled_) return true;
-	bool empty;
+	if (!enabled_)
+		return true;
 
+	bool empty;
 	cond_var_.lock();
 	writemutex_->lock();
-
 	empty = cond_var_.queue_base_.empty();
-
 	writemutex_->unlock();
 	cond_var_.unlock();
-
 	return empty;
+}
+
 
 }
 
-}
 

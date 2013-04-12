@@ -23,14 +23,226 @@ using namespace std;
 
 namespace soundalchemy {
 
+// /////////////////////////////////////////////////////////////////////////////
+//  Message types:
+//  Each message type defines an incoming (InboundMessage) and optionally an
+//  outgoing (OutboundMessage) Message subclass.
+// /////////////////////////////////////////////////////////////////////////////
+
+// MSG_START ///////////////////////////////////////////////////////////////////
+//
+
+/**
+ * @brief Incoming MSG_START message
+ */
+class MsgStart: public InboundMessage {
+public:
+	virtual OutboundMessage* instruct(DspServer& server) {
+		const char * error = NULL;
+		TAlchemyError err = server.start();
+		if(err != E_OK) error = STR_ERRORS[err];
+		OutboundMessage *reply =  OutboundMessage::AckStart( error );
+		reply->setChannelId(getChannelId());
+		setReply(reply);
+		return reply;
+	}
+};
+
+// MSG_STOP ////////////////////////////////////////////////////////////////////
+//
+
+/**
+ * @brief Incoming MSG_STOP message
+ */
+class MsgStop: public InboundMessage {
+public:
+	OutboundMessage* instruct(DspServer& server) {
+		server.stop();
+		OutboundMessage *reply = OutboundMessage::AckStop(NULL);
+		reply->setChannelId(getChannelId());
+		setReply(reply);
+		return reply;
+	}
+
+};
+
+// MSG_EXIT ////////////////////////////////////////////////////////////////////
+//
+
+/**
+ * @brief Incoming MSG_EXIT message
+ */
+class MsgExit: public InboundMessage {
+public:
+	OutboundMessage* instruct(DspServer& server) {
+		server.stopListening();
+		OutboundMessage *reply = OutboundMessage::AckExit();
+		reply->setChannelId(getChannelId());
+		setReply(reply);
+		return reply;
+	}
+
+	bool isExitMessage(void) { return true; }
+};
+
+
+// MSG_GET_DEVICE_LIST /////////////////////////////////////////////////////////
+//
+
+/**
+ * @brief Outgoing MSG_GET_DEVICE_LIST message
+ */
+class OutboundMsgDeviceList: public OutboundMessage, public AudioInf {
+	MsgDataStore current_device_;
+public:
+	OutboundMsgDeviceList(): OutboundMessage(MSG_GET_DEVICE_LIST) {}
+
+	virtual void beginDevice(const char* name, const char* fullname) {
+		AudioInf::beginDevice(name, fullname);
+		current_device_.clear();
+		current_device_["fullname"] = getCurrent().fullname_;
+		current_device_["input_streams"] = Json::Value(Json::arrayValue);
+		current_device_["output_streams"] = Json::Value(Json::arrayValue);
+	}
+
+	virtual void stream(int id, const char* name, bool input)  {
+		AudioInf::stream(id, name, input);
+		Json::Value stream;
+		stream["id"] = id;
+		stream["name"] = name;
+		if(input)
+			current_device_["input_streams"].append(stream);
+		else current_device_["output_streams"].append(stream);
+
+	}
+
+	virtual void endDevice() {
+		dataroot_[getCurrent().name_] = current_device_;
+	}
+
+};
+
+/**
+ * @brief Incoming MSG_GET_DEVICE_LIST message
+ */
+class MsgGetDeviceList: public InboundMessage {
+	bool do_redetect_;
+public:
+	MsgGetDeviceList(bool do_redetect = false): do_redetect_(do_redetect) {}
+	OutboundMessage* instruct(DspServer& server) {
+		OutboundMsgDeviceList *reply = new OutboundMsgDeviceList();
+		reply->setChannelId(getChannelId());
+		server.getDeviceList(*reply, do_redetect_);
+		setReply(reply);
+		return reply;
+	}
+};
+
+// MSG_SEND_CLIENT_ID //////////////////////////////////////////////////////////
+
+class MsgClientID: public OutboundMessage {
+	TChannelID new_client_;
+public:
+	MsgClientID(TChannelID new_client):
+		OutboundMessage(MSG_UNINITIALIZED),
+		new_client_(new_client) {
+		dataroot_["type"] = MSG_SEND_CLIENT_ID;
+		dataroot_["new_client"] = (TChannelID) new_client_;
+	}
+};
+
+// MSG_GET_STREAM //////////////////////////////////////////////////////////////
+//
+class MsgGetStream: public InboundMessage {
+	TStreamDirection direction_;
+public:
+	MsgGetStream(TStreamDirection direction) : direction_(direction) {}
+
+	OutboundMessage* instruct(DspServer& server) {
+		OutboundMessage* reply;
+		if(direction_ == INPUT_STREAM ) {
+		reply = OutboundMessage::AckGetStream(
+				server.getInputStream().getOwner().getName(),
+				server.getInputStream().getId(),
+				direction_
+				);
+		} else {
+			reply = OutboundMessage::AckGetStream(
+				server.getOutputStream().getOwner().getName(),
+				server.getOutputStream().getId(),
+				direction_
+				);
+		}
+		reply->setChannelId(getChannelId());
+		setReply(reply);
+		return reply;
+	}
+};
+
+// MSG_SET_STREAM //////////////////////////////////////////////////////////////
+//
+class MsgSetStream: public InboundMessage {
+	std::string device_id_;
+	int stream_id_;
+	TStreamDirection direction_;
+public:
+	MsgSetStream(const char* device_name, int id, TStreamDirection dir):
+		device_id_(device_name), stream_id_(id), direction_(dir) {}
+
+	OutboundMessage* instruct(DspServer& server) {
+
+		TAlchemyError err = E_OK;
+		const char* error = NULL;
+		if( direction_ == INPUT_STREAM) {
+			err = server.setInputStream(device_id_.c_str(), stream_id_);
+		} else {
+			err = server.setOutputStream(device_id_.c_str(), stream_id_);
+		}
+
+		if(err != E_OK ) error = STR_ERRORS[err];
+
+		OutboundMessage * reply = OutboundMessage::AckSetStream(error);
+		reply->setChannelId(getChannelId());
+		return reply;
+	}
+};
+
+// MSG_GET_STATE ///////////////////////////////////////////////////////////////
+//
+class MsgGetState: public InboundMessage {
+public:
+	OutboundMessage* instruct(DspServer& server) {
+		OutboundMessage *reply = OutboundMessage::AckGetState(server.getState());
+		reply->setChannelId(getChannelId());
+		return reply;
+	}
+};
+
+// MSG_CLIENT_OUT //////////////////////////////////////////////////////////////
+//
+class MsgClientOut: public InboundMessage {
+public:
+	OutboundMessage* instruct(DspServer& server) {
+		server.clientOut(getChannelId());
+		OutboundMessage *reply = OutboundMessage::AckClientOut();
+		reply->setChannelId(getChannelId());
+		return reply;
+	}
+};
+
+//
+// End of Message definitions //////////////////////////////////////////////////
+
+
+// Alchemy Servers has channel id of 0
 const Message::TChannelID Message::ALCHEMY_SERVER = 0;
 
+// Create a serialized form of the Message driven by a specified protocol
 void soundalchemy::OutboundMessage::serialize(TProtocol protocol,
 		std::ostream& output, int delimiter) {
 
 	switch(protocol) { // decide which protocol to use
 	case PROTOCOL_JSON: {
-
 		// send out the JSON data
 		output << Json::FastWriter().write(dataroot_) << (char) delimiter;
 		output.flush();
@@ -44,6 +256,7 @@ void soundalchemy::OutboundMessage::serialize(TProtocol protocol,
 
 }
 
+// Create an input message from a byte stream
 InboundMessage* soundalchemy::InboundMessage::unserialize(TProtocol protocol,
 		std::istream& stream, int delimiter) {
 
@@ -65,13 +278,33 @@ InboundMessage* soundalchemy::InboundMessage::unserialize(TProtocol protocol,
 
 	switch(msgtype) { // create the message
 	case MSG_START:
-		msg = new MsgStart( );
+		msg = new MsgStart();
 		break;
 	case MSG_STOP:
-		msg = new MsgStop( );
+		msg = new MsgStop();
 		break;
 	case MSG_GET_DEVICE_LIST:
-		msg = new MsgDeviceList( );
+		{
+			bool redetect = jsondoc["do_redetect"].asBool();
+			msg = new MsgGetDeviceList(redetect);
+		}
+		break;
+	case MSG_GET_STATE:
+		msg = new MsgGetState();
+		break;
+	case MSG_SET_STREAM:
+		{
+			TStreamDirection dir = (TStreamDirection) jsondoc["direction"].asInt();
+			std::string devid = jsondoc["device_id"].asString();
+			TStreamId streamid = jsondoc["stream_id"].asInt();
+			msg = new MsgSetStream(devid.c_str(), streamid, dir);
+		}
+		break;
+	case MSG_GET_STREAM:
+		{
+			TStreamDirection dir = (TStreamDirection) jsondoc["direction"].asInt();
+			msg = new MsgGetStream(dir);
+		}
 		break;
 	case MSG_EXIT:
 		msg = new MsgExit( );
@@ -84,99 +317,12 @@ InboundMessage* soundalchemy::InboundMessage::unserialize(TProtocol protocol,
 	return msg;
 }
 
-OutboundMessage* soundalchemy::MsgStart::instruct(DspServer& server) {
-	const char * error = NULL;
-	TAlchemyError err = server.start();
-	if(err != E_OK) error = STR_ERRORS[err];
-	OutboundMessage *reply =  OutboundMessage::AckStart( error );
-	reply->setChannelId(getChannelId());
-	setReply(reply);
-	return reply;
-}
+// /////////////////////////////////////////////////////////////////////////////
+// Input Message Initializers
+// /////////////////////////////////////////////////////////////////////////////
 
-OutboundMessage* soundalchemy::MsgStop::instruct(DspServer& server) {
-	server.stop();
-	OutboundMessage *reply = OutboundMessage::AckStop(NULL);
-	reply->setChannelId(getChannelId());
-	setReply(reply);
-	return reply;
-}
-
-OutboundMessage* soundalchemy::MsgExit::instruct(DspServer& server) {
-	server.stopListening();
-	OutboundMessage *reply = OutboundMessage::AckExit();
-	reply->setChannelId(getChannelId());
-	setReply(reply);
-	return reply;
-}
-
-
-OutboundMessage* MsgGetStream::instruct(DspServer& server) {
-	OutboundMessage* reply;
-	if(direction_ == INPUT_STREAM ) {
-	reply = OutboundMessage::AckGetStream(
-			server.getInputStream().getOwner().getName(),
-			server.getInputStream().getId(),
-			direction_
-			);
-	} else {
-		reply = OutboundMessage::AckGetStream(
-			server.getOutputStream().getOwner().getName(),
-			server.getOutputStream().getId(),
-			direction_
-			);
-	}
-	reply->setChannelId(getChannelId());
-	setReply(reply);
-	return reply;
-}
-
-OutboundMessage* MsgSetStream::instruct(DspServer& server) {
-
-	TAlchemyError err = E_OK;
-	const char* error = NULL;
-	if( direction_ ) {
-		err = server.setInputStream(device_name_.c_str(), id_);
-	} else {
-		err = server.setOutputStream(device_name_.c_str(), id_);
-	}
-
-	if(err != E_OK ) error = STR_ERRORS[err];
-
-	OutboundMessage * reply = OutboundMessage::AckSetStream(error);
-	reply->setChannelId(getChannelId());
-	return reply;
-}
-
-void soundalchemy::OutboundMsgDeviceList::beginDevice(const char* name,
-		const char* fullname) {
-	AudioInf::beginDevice(name, fullname);
-	current_device_.clear();
-	current_device_["input_streams"] = Json::Value(Json::arrayValue);
-	current_device_["output_streams"] = Json::Value(Json::arrayValue);
-}
-
-void soundalchemy::OutboundMsgDeviceList::stream(int id, const char* name, bool input) {
-	AudioInf::stream(id, name, input);
-	Json::Value stream;
-	stream[Json::valueToString(id)] = string(name);
-	if(input)
-		current_device_["input_streams"].append(stream);
-	else current_device_["output_streams"].append(stream);
-
-}
-
-void soundalchemy::OutboundMsgDeviceList::endDevice() {
-	dataroot_[getCurrent().fullname_] = current_device_;
-}
-
-
-OutboundMessage* soundalchemy::MsgDeviceList::instruct(DspServer& server) {
-	OutboundMsgDeviceList *reply = new OutboundMsgDeviceList();
-	reply->setChannelId(getChannelId());
-	server.getDeviceList(*reply);
-	setReply(reply);
-	return reply;
+InboundMessage* InboundMessage::newMsgClientOut() {
+	return new MsgClientOut();
 }
 
 // /////////////////////////////////////////////////////////////////////////////
@@ -184,8 +330,7 @@ OutboundMessage* soundalchemy::MsgDeviceList::instruct(DspServer& server) {
 // /////////////////////////////////////////////////////////////////////////////
 
 OutboundMessage* OutboundMessage::MsgSendClientID( Message::TChannelID id ) {
-	OutboundMessage *msg = new MsgClientID(MSG_SEND_CLIENT_ID);
-	msg->dataroot_["channel_alloced"] = id;
+	OutboundMessage *msg = new MsgClientID(id);
 	return msg;
 }
 
@@ -211,9 +356,7 @@ OutboundMessage* OutboundMessage::AckGetStream(const char* device_name, int id,
 	OutboundMessage *msg = new OutboundMessage(MSG_GET_STREAM);
 	msg->dataroot_["device_name"] = string(device_name);
 	msg->dataroot_["id"] = id;
-	if(dir == INPUT_STREAM)
-		msg->dataroot_["direction"] = string("input");
-	else msg->dataroot_["direction"] = string("output");
+	msg->dataroot_["direction"] = dir;
 
 	return msg;
 }
@@ -222,6 +365,16 @@ OutboundMessage* OutboundMessage::AckSetStream(const char* error) {
 	OutboundMessage *msg = new OutboundMessage(MSG_SET_STREAM);
 	if(error != NULL) msg->dataroot_["error"] = string(error);
 	return msg;
+}
+
+OutboundMessage* OutboundMessage::AckGetState(TProcessingState state) {
+	OutboundMessage *msg = new OutboundMessage(MSG_GET_STATE);
+	msg->dataroot_["state"] = state;
+	return msg;
+}
+
+OutboundMessage* OutboundMessage::AckClientOut( void ) {
+	return new OutboundMessage(MSG_CLIENT_OUT);
 }
 
 }

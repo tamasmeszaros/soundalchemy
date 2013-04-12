@@ -7,15 +7,12 @@
 
 #include "soundeffect.h"
 #include "logs.h"
+#include <cstring>
 
 namespace soundalchemy {
 
-SoundEffect::SoundEffect(unsigned int inputs, unsigned int outputs):
-		unique_id_(generateUniqueID()), in_channels_(inputs), out_channels_(outputs){
-
-	inputs_ = new InputPort[in_channels_];
-	outputs_ = new OutputPort[in_channels_];
-}
+SoundEffect::SoundEffect():
+		unique_id_(generateUniqueID()) {}
 
 SoundEffect::TEffectID SoundEffect::generateUniqueID(void) {
 	static TEffectID id = 0;
@@ -24,105 +21,117 @@ SoundEffect::TEffectID SoundEffect::generateUniqueID(void) {
 	return ret;
 }
 
-//void SoundEffect::setInputChannels(unsigned int count) {
-////	inputs_ = (InputPort*) ::operator new[] (sizeof(InputPort)*count);
-////	for(int i = 0; i < count; i++ ) inputs_[i] = new InputPort(*this);
-//
-//}
-//
-//void SoundEffect::setOutputChannels(unsigned int count) {
-//
-//}
-
 SoundEffect::~SoundEffect() {
-	delete [] inputs_;
-	delete [] outputs_;
+	for(TParamVector::iterator p = params_.begin(); p != params_.end(); p++) {
+		delete *p;
+	}
 
-	for( TParamMapIt it = params_.begin(); it != params_.end(); it++)
-		delete it->second;
+	for(TPortVector::iterator p = inputs_.begin(); p != inputs_.end(); p++) {
+		delete *p;
+	}
+
+	for(TPortVector::iterator p = outputs_.begin(); p != outputs_.end(); p++) {
+		delete *p;
+	}
+
 }
 
-
-
-soundalchemy::SoundEffect::Param::Param(const char* name, TParamID id) {
-	this->id = id;
-	this->name = name;
-	this->value = 0.0;
+void SoundEffect::addParam(Param *param) {
+	if( param != NULL ) {
+		param->id_ = params_.size();
+		params_.push_back(param);
+	}
 }
 
-SoundEffect::TParamValue SoundEffect::getParam(const char* name) {
-	for(TParamMapIt it = params_.begin(); it != params_.end(); it++) {
-		if(!it->second->name.compare(name)) return it->second->value;
+void SoundEffect::addPort(Port *port) {
+	if(port != NULL ) {
+		if(port->getDirection() == INPUT_PORT) inputs_.push_back(port);
+		else outputs_.push_back(port);
+	}
+}
+
+SoundEffect::Param* SoundEffect::getParam(std::string name) {
+	for(TParamVector::iterator p = params_.begin(); p != params_.end(); p++) {
+		if(! (*p)->getName().compare(name)) return *p;
 	}
 
 	log(LEVEL_ERROR, STR_ERRORS[E_INDEX]);
-	return 0.0;
+	return NULL;
 }
 
-SoundEffect::TParamValue SoundEffect::getParam(TParamID id) {
-	TParamMapIt p = params_.find(id);
-	if(p != params_.end()) return p->second->value;
+SoundEffect::Param* SoundEffect::getParam(TParamID id) {
+	if(id >= params_.size()) {
+		log(LEVEL_ERROR, STR_ERRORS[E_INDEX]);
+		return NULL;
+	}
 
-	log(LEVEL_ERROR, STR_ERRORS[E_INDEX]);
-	return 0.0;
-}
-
-void SoundEffect::setParam(const char* name, TParamValue value) {
-}
-
-void SoundEffect::setParam(TParamID id, TParamValue value) {
+	return params_[id];
 }
 
 unsigned int SoundEffect::getInputsCount(void) {
-	return in_channels_;
+	return inputs_.size();
 }
 
 unsigned int SoundEffect::getOutputsCount(void) {
-	return out_channels_;
+	return outputs_.size();
 }
 
-SoundEffect::InputPort * SoundEffect::getInputPort(TPortID index) {
-	if(index <= in_channels_ || inputs_ == NULL) {
+SoundEffect::Port * SoundEffect::getInputPort(TPortID index) {
+	if(index >= inputs_.size() ) {
 		log(LEVEL_ERROR, STR_ERRORS[E_INDEX]);
 		return NULL;
 	}
-	return &inputs_[index];
+	return inputs_[index];
 }
 
-SoundEffect::OutputPort * SoundEffect::getOutputPort(TPortID index) {
-	if(index <= out_channels_ || outputs_ == NULL) {
+SoundEffect::Port * SoundEffect::getOutputPort(TPortID index) {
+	if(index >= outputs_.size() ) {
 		log(LEVEL_ERROR, STR_ERRORS[E_INDEX]);
 		return NULL;
 	}
-	return &outputs_[index];
+	return outputs_[index];
 }
 
-void MixerEffect::setOutputsCount(unsigned int outputs) {
-	out_channels_ = outputs;
-	delete [] outputs_;
-	outputs_ = new OutputPort[out_channels_];
+MixerEffect::MixerEffect() {
 
-}
-
-void MixerEffect::setInputsCount(unsigned int inputs) {
-	in_channels_ = inputs;
-	inputs_ = new InputPort[in_channels_];
-	delete [] inputs_;
-}
-
-MixerEffect::MixerEffect(unsigned int inputs, unsigned int outputs):
-		SoundEffect(inputs, outputs) {
-	Param *p = new Param("volume", 0);
-	p->value = 1.0;
-	params_[0] = p;
+	Param *p = new MixerParam( "volume");
+	p->setValue(1.0);
+	addParam(p);
 }
 
 void MixerEffect::process(unsigned int sample_count) {
 
+
+	if( getInputsCount() == getOutputsCount() ) {
+		// simply copy the buffer out with volume adjustment
+		for(unsigned int j = 0; j < getInputsCount(); j++) {
+			for(unsigned int i = 0; i < sample_count; i++) {
+				getOutputPort(j)->getBuffer() [i] = getInputPort(j)->getBuffer() [i] * getParam(0)->getValue();
+			}
+		}
+	}
+	else if( getInputsCount() > getOutputsCount() ) {
+		// downmix
+		for(unsigned int j = 0; j < getOutputsCount(); j++) {
+			for(unsigned int i = 0; i < sample_count; i++) {
+				// frame for channel A: frA
+				// frame for channel B: frB (next channel after A)
+				// frA = Volume*(frA+frB)/2
+				getOutputPort(j)->getBuffer() [i] =
+						getParam(0)->getValue() * ((getInputPort(j)->getBuffer() [i])+(getInputPort(j+1)->getBuffer() [i]))/2 ;
+			}
+		}
+	}
+	else {
+		// upmix
+		for(unsigned int j = 0; j < getOutputsCount(); j++) {
+			for(unsigned int i = 0; i < sample_count; i++) {
+				//simply copy the first channel to all outputs
+				getOutputPort(j)->getBuffer() [i] =
+						getParam(0)->getValue() * (getInputPort(0)->getBuffer() [i]);
+			}
+		}
+	}
 }
 
-}
-
-
-
- /* namespace soundalchemy */
+} /* namespace soundalchemy */

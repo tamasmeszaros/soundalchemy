@@ -103,10 +103,7 @@ TErrors SalsaStream::_open(int mode) {
 }
 
 TErrors SalsaStream::open(void) {
-	TErrors ret;
-	if(direction_ == OUTPUT_STREAM) ret = _open(SND_PCM_NONBLOCK);
-	else ret = _open(0);
-	return ret;
+	return _open(0);
 }
 
 void SalsaStream::close() {
@@ -485,7 +482,7 @@ TErrors SalsaStream::write(llaAudioPipe& buffer) {
 	TErrors err;
 	if( (err = updateSettings(buffer)) != E_OK) return err;
 
-	buffer.onSamplesReady();
+
 
 	char *iraw, **niraw;
 	int rc;
@@ -519,17 +516,63 @@ TErrors SalsaStream::write(llaAudioPipe& buffer) {
 TErrors SalsaStream::connect( llaOutputStream* output, llaAudioPipe& buffer) {
 	TErrors ret = _open(SND_PCM_NONBLOCK);
 
+	// Update pcm settings
 	if( ret != E_OK || (ret = updateSettings(buffer)) != E_OK ) return ret;
-	if( (ret = output->open()) != E_OK) return ret;
 
-	int err = snd_pcm_sw_params_malloc(&sw_config_);
+
+	int err = 0;
+
+	// set up the output device ////////////////////////////////////////////////
+
+	// This is not a nice operation but the output stream has to be a SalsaStream
+	// since at this point the engine is surely the salsa-lib library.
+	SalsaStream *salsaoutput = (SalsaStream*) output;
+
+	// open the output device
+	if( (ret = salsaoutput->_open(SND_PCM_NONBLOCK)) != E_OK) return ret;
+
+	//Update settings
+	if( ret != E_OK || (ret = salsaoutput->updateSettings(buffer)) != E_OK )
+		return ret;
+
+	// set up for polling write
+	err = snd_pcm_sw_params_malloc(&(salsaoutput->sw_config_));
+	err = snd_pcm_sw_params_current(salsaoutput->pcm_, salsaoutput->sw_config_);
+	CHECK_SNDERROR(err, E_STREAM_CONFIG);
+
+	snd_pcm_hw_params_alloca(&(salsaoutput->hw_config_));
+	snd_pcm_hw_params_current(salsaoutput->pcm_, salsaoutput->hw_config_);
+
+	// get the period size
+	snd_pcm_uframes_t fr_avail;
+	err = snd_pcm_hw_params_get_period_size(salsaoutput->hw_config_,
+			&fr_avail, NULL);
+	CHECK_SNDERROR(err, E_STREAM_CONFIG);
+
+	err = snd_pcm_sw_params_set_start_threshold (salsaoutput->pcm_,
+			salsaoutput->sw_config_, 0U );
+	CHECK_SNDERROR(err, E_STREAM_CONFIG);
+
+	err = snd_pcm_sw_params_set_avail_min(salsaoutput->pcm_,
+			salsaoutput->sw_config_, fr_avail  );
+	CHECK_SNDERROR(err, E_STREAM_CONFIG);
+
+	err = snd_pcm_sw_params(salsaoutput->pcm_, salsaoutput->sw_config_);
+	CHECK_SNDERROR(err, E_STREAM_CONFIG);
+
+	snd_pcm_prepare(salsaoutput->pcm_);
+
+
+	// Set up the input stream for polling /////////////////////////////////////
+	// This is the same process as for the output.
+
+	err = snd_pcm_sw_params_malloc(&sw_config_);
 	err = snd_pcm_sw_params_current(pcm_, sw_config_);
 	CHECK_SNDERROR(err, E_STREAM_CONFIG);
 
 	snd_pcm_hw_params_alloca(&hw_config_);
 	snd_pcm_hw_params_current(pcm_, hw_config_);
 
-	snd_pcm_uframes_t fr_avail;
 	err = snd_pcm_hw_params_get_period_size(hw_config_,  &fr_avail, NULL);
 	CHECK_SNDERROR(err, E_STREAM_CONFIG);
 
@@ -545,7 +588,7 @@ TErrors SalsaStream::connect( llaOutputStream* output, llaAudioPipe& buffer) {
 	snd_pcm_prepare(pcm_);
 
 
-	snd_pcm_uframes_t frames;
+	snd_pcm_uframes_t frames, wr_frames;
 
 	char *iraw, **niraw;
 
@@ -565,7 +608,7 @@ TErrors SalsaStream::connect( llaOutputStream* output, llaAudioPipe& buffer) {
 		int rc;
 		getRawInputBuffers( buffer, &iraw, &niraw);
 
-
+		// read from the stream
 		if(organization_ == SND_PCM_ACCESS_RW_NONINTERLEAVED) {
 			rc = snd_pcm_readn(pcm_, (void**)niraw, frames);
 		}
@@ -573,8 +616,12 @@ TErrors SalsaStream::connect( llaOutputStream* output, llaAudioPipe& buffer) {
 			rc = snd_pcm_readi(pcm_, (void*)iraw, frames);
 		}
 
-		TSize lastwrite = ((TSize)rc <= buffer.getBufferLength())?rc : buffer.getBufferLength();
+		// save the number of frames read
+		TSize lastwrite = ((TSize)rc <= buffer.getBufferLength())?
+				rc : buffer.getBufferLength();
 		setBufferLastWrite(buffer, lastwrite);
+
+		// detect errors
 		if (rc == -EPIPE) {
 		  /* EPIPE means underrun */
 		  snd_pcm_prepare(pcm_);
@@ -587,22 +634,56 @@ TErrors SalsaStream::connect( llaOutputStream* output, llaAudioPipe& buffer) {
 			return E_READ_STREAM;
 		}
 
-		//buffer.onSamplesReady();
-		if(buffer.fail()) return E_BUFFER_DISMATCH;
-
-		if( (ret = output->write(buffer))!= E_OK ) {
+		// calling the pipe's callback
+		buffer.onSamplesReady();
+		if(buffer.fail()) {
 			snd_pcm_sw_params_free(sw_config_);
+			snd_pcm_sw_params_free(salsaoutput->sw_config_);
 			close();
 			output->close();
-			return ret;
+			return E_BUFFER_DISMATCH;
+		}
+
+		// write the frames to the output stream ///////////////////////////////
+		snd_pcm_start(salsaoutput->pcm_);
+		if ((err = snd_pcm_wait (salsaoutput->pcm_, -1)) < 0) {
+				//LOGGER().warning(E_READ_STREAM, "Polling failed");
+				//break;
+				//c++;
+				//if(c>5) break;
+		}
+
+		wr_frames = snd_pcm_avail_update(salsaoutput->pcm_);
+		frames = wr_frames > lastwrite? lastwrite : wr_frames;
+		getRawInputBuffers( buffer, &iraw, &niraw);
+
+		if(salsaoutput->organization_ == SND_PCM_ACCESS_RW_NONINTERLEAVED) {
+			rc = snd_pcm_writen(salsaoutput->pcm_, (void**)niraw, frames);
+		}
+		else {
+			rc = snd_pcm_writei(salsaoutput->pcm_, (void*)iraw, frames);
+		}
+
+		// detect errors
+		if (rc == -EPIPE) {
+		  /* EPIPE means underrun */
+		  snd_pcm_prepare(salsaoutput->pcm_);
+		} else if (rc < 0) {
+			LOGGER().warning(E_WRITE_STREAM, snd_strerror(rc));
+			//snd_pcm_recover(pcm_, rc, 0);
+			snd_pcm_sw_params_free(sw_config_);
+			snd_pcm_sw_params_free(salsaoutput->sw_config_);
+			close();
+			output->close();
+			return E_WRITE_STREAM;
 		}
 
 	}
 
 	snd_pcm_sw_params_free(sw_config_);
+	snd_pcm_sw_params_free(salsaoutput->sw_config_);
 	close();
 	output->close();
-
 
 	return E_OK;
 }

@@ -9,24 +9,75 @@
 #define LADSPAEFFECT_H_
 
 #include "soundeffect.h"
+#include "ladspa.h"
 #include <list>
 
 namespace soundalchemy {
 
 class LADSPAEffect: public soundalchemy::SoundEffect {
-public:
-	typedef std::list<LADSPAEffect*> TLADSPAPluginLibrary;
-	typedef TLADSPAPluginLibrary::iterator TLADSPAPluginLibraryIt;
 
+	class LADSPAParam: public Param {
+		LADSPA_PortRangeHint& range_hint_;
+
+	public:
+		LADSPAParam(std::string name, LADSPA_PortRangeHint& range_hint):
+			Param(name),
+			range_hint_(range_hint_) {}
+
+		virtual TParamValue getValue() { return (TParamValue) value_; }
+
+		virtual void setValue(TParamValue value) {
+			value_ = (LADSPA_Data) value;
+		}
+
+		LADSPA_Data value_;
+	};
+
+	class LADSPAPort: public Port {
+		LADSPA_PortRangeHint& range_hint_;
+		LADSPA_Data *buffer_;
+		LADSPA_Handle plugin_handle_;
+		const LADSPA_Descriptor& plugin_descriptor_;
+		unsigned int port_index_;
+
+	public:
+		LADSPAPort(TPortDirection dir, std::string name,
+				LADSPA_PortRangeHint& range_hint,
+				LADSPA_Handle plugin_handle,
+				const LADSPA_Descriptor& plugin_descriptor_, unsigned int index):
+			Port(dir, name),
+			range_hint_(range_hint_),
+			plugin_handle_(plugin_handle),
+			plugin_descriptor_(plugin_descriptor_),
+			port_index_(index) {}
+
+		virtual void connect(Port& port) {
+			buffer_ = (LADSPA_Data*) port.getBuffer();
+			plugin_descriptor_.connect_port(plugin_handle_, port_index_, buffer_);
+		}
+
+		virtual TSample* getBuffer() { return (TSample*) buffer_; }
+
+	};
+
+	LADSPA_Handle plugin_handle_;
+	const LADSPA_Descriptor& plugin_descriptor_;
+
+public:
+
+
+	LADSPAEffect(const LADSPA_Descriptor& descriptor, llaudio::TSampleRate srate);
 	virtual ~LADSPAEffect();
 
 	virtual void process(unsigned int sample_count);
 
-	static TLADSPAPluginLibrary loadPlugin(const char* filename);
+	virtual void activate(void);
+	virtual void deactivate(void);
 
-protected:
+	static LADSPAEffect* loadPlugin(const char* library_file,
+			const char* label, llaudio::TSampleRate sample_rate);
 
-	//LADSPAEffect();
+
 };
 
 } /* namespace soundalchemy */

@@ -20,7 +20,7 @@
 #include "llaerrorhandler.h"
 #include "llastream.h"
 #include "lladevice.h"
-#include "llaaudiobuffer.h"
+#include "llaaudiopipe.h"
 #include "lladriver.h"
 #include "lladevicemanager.h"
 

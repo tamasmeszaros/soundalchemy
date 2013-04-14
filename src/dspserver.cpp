@@ -16,6 +16,7 @@
 #include <unistd.h>
 #include <string>
 #include "dspserver.h"
+#include "ladspaeffect.h"
 
 
 using namespace std;
@@ -51,8 +52,8 @@ llaDeviceManager& DspServer::lla_devman_ = llaDeviceManager::getInstance(llaEH);
 
 // DspServer Constructor
 DspServer::DspServer():
-		dsp_process_(*this),
 		proc_graph_(),
+		dsp_process_(proc_graph_),
 		clients_count_(0),
 		messagequeue_(NULL)
 		 {
@@ -250,15 +251,14 @@ void DspServer::broadcastMessage(OutboundMessage& message) {
 //
 
 // Constructor of the DspProcess class
-DspServer::DspProcess::DspProcess(DspServer& server) :
-		dspserver_(server), proc_thread_(Thread::getNewThread()),
+DspServer::DspProcess::DspProcess(ProcessingGraph& graph) :
+		graph_(graph), proc_thread_(Thread::getNewThread()),
 		state_(proc_thread_) {
 	callback_counter_ = 0;
 	state_.val = ST_STOPPED;
 	state_.state_requested_ = ST_STOPPED;
 	// try to set real time priority to the processing thread
-	if (proc_thread_->setRealtime())
-		log(LEVEL_WARNING, "Cannot set real time policy");
+	proc_thread_->setRealtime();
 
 	getInputBuffer().channelsRequested = CH_MONO;
 	getOutputBuffer().channelsRequested = CH_STEREO;
@@ -273,11 +273,14 @@ void* DspServer::DspProcess::run() {
 	TErrors e = llaudio::E_OK;
 	TProcessingState st;
 
+	graph_.activate();
+
 	// This thread will consume most of its life in the connectStream function
 	// in which the processing is done. It calls the onSamplesReady method
 	// whenever samples are ready to be processed
-	e = connectStreams(dspserver_.proc_graph_.getInput(),
-			dspserver_.proc_graph_.getOutput());
+	e = connectStreams(graph_.getInput(), graph_.getOutput());
+
+	graph_.deactivate();
 
 	// while the processing has ran the requested state could be changed
 	// but if all went right this has to be ST_STOPPED
@@ -303,27 +306,27 @@ void* DspServer::DspProcess::run() {
 TAlchemyError DspServer::DspProcess::startProcessing(void) {
 	TAlchemyError retval = E_OK;
 	lock();
-	int ret;
+	TAlchemyError ret;
 	switch (state_.val) {
 	case ST_STOPPED:
-		unlock();
 		ret = proc_thread_->run(*this);
-		if (ret) {
+		if (ret == E_THREAD) {
 			retval = E_START;
 			log(LEVEL_ERROR, STR_ERRORS[retval]);
+			return retval;
 		}
-		lock();
 		waitFor();
+		if (state_.val != ST_RUNNING) {
+			log(LEVEL_ERROR, STR_ERRORS[E_START]);
+			retval = E_START;
+		}
 		break;
 	default:
 		break;
 	}
 
 	unlock();
-	if (state_.val != ST_RUNNING) {
-		log(LEVEL_ERROR, STR_ERRORS[E_START]);
-		retval = E_START;
-	}
+
 	return retval;
 }
 
@@ -359,7 +362,7 @@ void DspServer::DspProcess::onSamplesReady(void) {
 		// call that the processing goes well and it can continue broadcasting
 		// this fact to clients
 		if (callback_counter_ == 2)
-			proc_thread_->wakeUpAll();
+			proc_thread_->wakeUp();
 	} else {
 		unlock();
 		return;
@@ -377,17 +380,10 @@ void DspServer::DspProcess::onSamplesReady(void) {
 	float** o_samples = getOutputBuffer().getSamples();
 	float** i_samples = getInputBuffer().getSamples();
 
-	dspserver_.proc_graph_.setInputBuffer(i_samples[0]);
-	dspserver_.proc_graph_.setOutputBuffer(o_samples[0], o_samples[1]);
+	graph_.setInputBuffer(i_samples, getInputBuffer().getChannels());
+	graph_.setOutputBuffer(o_samples, getOutputBuffer().getChannels());
 
-//  testing
-//	for(unsigned int j = 0; j < getChannels(); j++) {
-//		for(unsigned int i = 0; i < getBufferLength(); i++) {
-//			o_samples[j] [i] = i_samples[j] [i];
-//		}
-//	}
-
-	dspserver_.proc_graph_.traverse(this->lastwrite_);
+	graph_.traverse(this->lastwrite_);
 	getOutputBuffer().writeSamples();
 
 	callback_counter_++;
@@ -395,33 +391,47 @@ void DspServer::DspProcess::onSamplesReady(void) {
 
 // Processing Graph ////////////////////////////////////////////////////////////
 //
-DspServer::Input::Input() :
+DspServer::ProcessingGraph::Input::Input() : MixerEffect("input"),
 		llainput(&(lla_devman_.getDevice("RP250").getInputStream())) {
-	MixerPort* pi = new MixerPort(SoundEffect::INPUT_PORT, "input");
-	MixerPort* po = new MixerPort(SoundEffect::OUTPUT_PORT, "output");
-	addPort(pi);
-	addPort(po);
+
+	// the channel count of the audio interface can be changed when it's
+	// opened so this is just a guess of the actual channel count. The final
+	// value is determined in the ProcessingGraph::setInputBuffer() method
+	setInputsCount(llainput->getChannelCount());
+
+	// the input is a mono signal
+	addPort(new MixerPort(SoundEffect::OUTPUT_PORT, "output"));
 }
 
-DspServer::Output::Output() :
+
+DspServer::ProcessingGraph::Output::Output() : MixerEffect("output"),
 		llaoutput(&(lla_devman_.getDevice("RP250").getOutputStream())) {
-	MixerPort* pl = new MixerPort(SoundEffect::OUTPUT_PORT, "left");
-	MixerPort* pr = new MixerPort(SoundEffect::OUTPUT_PORT, "right");
-	MixerPort* pil = new MixerPort(SoundEffect::INPUT_PORT, "input_left");
-	MixerPort* pir = new MixerPort(SoundEffect::INPUT_PORT, "input_right");
+
+	// the channel count of the audio interface can be changed when it is
+	// opened so this is just a guess of the actual channel count. The final
+	// value is determined in the ProcessingGraph::setOutputBuffer() method
+	setOutputsCount(llaoutput->getChannelCount());
+
+	// create the 2 output ports as the output will be stereo and
+	// the final output to the audio interface will be mixed to the appropriate
+	// channel count that is supported by the interface
+	MixerPort* pl = new MixerPort(SoundEffect::INPUT_PORT, "left");
+	MixerPort* pr = new MixerPort(SoundEffect::INPUT_PORT, "right");
 	addPort(pl);
 	addPort(pr);
-	addPort(pil);
-	addPort(pir);
 }
 
 DspServer::ProcessingGraph::ProcessingGraph() :
-		mutex_(Thread::getMutex()),
-		input_(), output_(), sample_rate_(SR_CD_QUALITY_44100) {
+		input_(), output_(), mutex_(Thread::getMutex()),
+		sample_rate_(SR_CD_QUALITY_44100), bypassed_(false)
+		 {
 
+	// When the graph is empty, the input is mono and the output is stereo
+	// so it is necessary to up-mix the input signal.
+	output_.setInputsCount(input_.getOutputsCount());
 
-//	input_.getOutputPort(0)->connect(*(output_.getInputPort(0)));
-//	input_.getOutputPort(0)->connect(*(output_.getInputPort(1)));
+//	LADSPAEffect *amp = LADSPAEffect::loadPlugin("caps.so", "PhaserI", sample_rate_);
+//	addEffect(amp, 0);
 
 }
 
@@ -429,41 +439,200 @@ void DspServer::ProcessingGraph::setSampleRate() {
 	// TODO set the sample rate off all effects in a for loop
 }
 
-void  DspServer::ProcessingGraph::addEffect(SoundEffect* effect) {
-	// TODO set up connections and add the effect to the chain
+TAlchemyError
+DspServer::ProcessingGraph::addEffect(SoundEffect* effect, int position ) {
+	bool add_after = position < 0;
+
+	unsigned int index;
+	if(effectstack_.empty()) index = 0;
+	else index = add_after ? effectstack_.size() + position : position;
+
+	SoundEffect *effect_before = index == 0 ? &input_ : effectstack_[index];
+	SoundEffect *effect_after = NULL;
+
+	if(effectstack_.empty()) {
+		effect_after = &output_;
+	}
+	else if (add_after) effect_after = index == effectstack_.size()-1 ? &output_ : effectstack_[index+1];
+	else effect_after = effectstack_[index];
+
+
+	if( effect->getInputsCount() != effect_before->getOutputsCount() ) {
+		return soundalchemy::E_PORTS_INCOMPATIBLE;
+	}
+
+	if( effect_after == &output_ ) {
+		if ( effect->getOutputsCount() <= 2)
+			output_.setInputsCount(effect->getOutputsCount());
+		else return soundalchemy::E_PORTS_INCOMPATIBLE;
+	} else if( effect->getOutputsCount() != effect_after->getInputsCount() ) {
+		return soundalchemy::E_PORTS_INCOMPATIBLE;
+	}
+
+	mutex_->lock();
+
+//	// connect all input ports
+//	for( unsigned int in = 0; in < effect->getInputsCount(); in++ ) {
+//		effect_before->getOutputPort(in)->connect(*(effect->getInputPort(in)));
+//	}
+//
+//	// connect all outputs
+//	for( unsigned int out = 0; out < effect->getInputsCount(); out++ ) {
+//		effect_after->getInputPort(out)->connect(*(effect->getOutputPort(out)));
+//	}
+
+	// inserting the effect to the effect stack. This is a painful operation
+	// but effect addition is assumed to be less frequent
+	//bool found = false;
+	TEffectStackIt pos = effectstack_.begin();
+	for(; pos != effectstack_.end() && *pos != effect_after; pos++) ;
+
+	effectstack_.insert(pos, effect);
+
+	mutex_->unlock();
+	return E_OK;
+}
+
+void DspServer::ProcessingGraph::removeEffect(SoundEffect::TEffectID id) {
+
+}
+
+void DspServer::ProcessingGraph::bypass(void) {
+	mutex_->lock();
+	bypassed_ = !bypassed_;
+	mutex_->unlock();
 }
 
 void DspServer::ProcessingGraph::traverse(unsigned int sample_count) {
 	mutex_->lock();
-	input_.process(sample_count);
-	for (TEffectStackIt it = effectstack_.begin(); it != effectstack_.end();
-			it++) {
-		(*it)->process(sample_count);
+
+	SoundEffect *previous = &input_;
+	if(!bypassed_) {
+
+		// The host has to ensure that the output_ effect has min 2 allocated
+		// output ports
+		input_.getOutputPort(0)->connect(*(output_.getOutputPort(0)));
+		input_.getMutex()->lock();
+		input_.process(sample_count);
+		input_.getMutex()->unlock();
+
+		for (TEffectStackIt it = effectstack_.begin(); it != effectstack_.end();
+				it++) {
+			for(unsigned int p = 0; p < (*it)->getInputsCount(); p++) {
+				(*it)->getInputPort(p)->connect(*(previous->getOutputPort(p)));
+			}
+
+			(*it)->getOutputPort(0)->connect(*(previous->getInputPort(0)));
+			if((*it)->getOutputsCount() == 2) {
+				if(previous->getInputsCount() == 1 ) {
+					// previous effect had 1 input. A buffer from the output
+					// port of the output effect will be used
+					(*it)->getOutputPort(2)->connect(*(output_.getOutputPort(1)));
+				}
+				else {
+					(*it)->getOutputPort(2)->connect(*(previous->getInputPort(1)));
+				}
+			}
+
+			(*it)->getMutex()->lock();
+			(*it)->process(sample_count);
+			(*it)->getMutex()->unlock();
+			previous = (*it);
+		}
+
+		for(unsigned int p = 0; p < output_.getInputsCount(); p++) {
+			output_.getInputPort(p)->connect(*(previous->getOutputPort(p)));
+		}
+
+	} else {
+		// don't use the input mixer effect. Connect all input ports of the input
+		// effect to the inputs of the output mixer and go
+		output_.setInputsCount(input_.getInputsCount());
+		for(unsigned int p = 0; p < output_.getInputsCount(); p++) {
+			output_.getInputPort(p)->connect(*(input_.getInputPort(p)));
+		}
+
 	}
+
+	output_.getMutex()->lock();
 	output_.process(sample_count);
+	output_.getMutex()->unlock();
 	mutex_->unlock();
 }
 
-void DspServer::ProcessingGraph::setInputBuffer(SoundEffect::TSample* buffer) {
-	MixerEffect::MixerPort p(SoundEffect::INPUT_PORT, "", buffer);
+void DspServer::ProcessingGraph::setInputBuffer(SoundEffect::TSample** buffer,
+		unsigned int channels) {
 
-	// At this moment the processing graph is empty. The output if the
-	// entry MixerEffect (input_) is connected with the input of the final
-	// MixerEffect (output_).
-	input_.getInputPort(0)->connect(p);
-	input_.getOutputPort(0)->connect(p);
+	input_.setInputsCount(channels);
 
-	output_.getInputPort(0)->connect(p);
-	output_.getInputPort(1)->connect(p);
+	for(unsigned int c = 0; c < channels; c++) {
+		MixerEffect::MixerPort p(SoundEffect::INPUT_PORT, "", buffer[c]);
+		input_.getInputPort(c)->connect(p);
+	}
+
 }
 
-void DspServer::ProcessingGraph::setOutputBuffer(
-		SoundEffect::TSample* buffer_left, SoundEffect::TSample* buffer_right) {
-	MixerEffect::MixerPort left(SoundEffect::INPUT_PORT, "", buffer_left);
-	MixerEffect::MixerPort right(SoundEffect::INPUT_PORT, "", buffer_right);
-	output_.getOutputPort(0)->connect(left);
-	output_.getOutputPort(1)->connect(right);
+void DspServer::ProcessingGraph::setOutputBuffer(SoundEffect::TSample **buffer,
+		unsigned int channels) {
 
+	output_.setOutputsCount(channels);
+
+	for(unsigned int c = 0; c < channels; c++) {
+		MixerEffect::MixerPort p(SoundEffect::OUTPUT_PORT, "", buffer[c]);
+		output_.getOutputPort(c)->connect(p);
+	}
+
+}
+
+SoundEffect* DspServer::ProcessingGraph::getEffectById(SoundEffect::TEffectID id) {
+	SoundEffect *effect;
+
+	if(id > effectstack_.size()) {
+		log(LEVEL_WARNING, "%: %", STR_ERRORS[soundalchemy::E_INDEX],
+				"No effect with the given index");
+	}
+	else if ( id == 0 ) {
+		effect = &input_;
+	} else if( id == effectstack_.size()) {
+		effect = &output_;
+	}
+	else effect = effectstack_[id-1];
+
+	return effect;
+}
+
+void DspServer::ProcessingGraph::setEffectParam(SoundEffect::TEffectID id,
+		std::string param, SoundEffect::TParamValue value) {
+	setEffectParam<std::string>(id, param, value);
+}
+
+void DspServer::ProcessingGraph::setEffectParam(SoundEffect::TEffectID id,
+		SoundEffect::TParamID param, SoundEffect::TParamValue value) {
+	setEffectParam<SoundEffect::TParamID>(id, param, value);
+}
+
+SoundEffect::TParamValue
+DspServer::ProcessingGraph::getEffectParam(SoundEffect::TEffectID id,
+		SoundEffect::TParamID param) {
+	return getEffectParam<SoundEffect::TParamID>(id, param);
+}
+
+SoundEffect::TParamValue
+DspServer::ProcessingGraph::getEffectParam(SoundEffect::TEffectID id,
+				std::string param_name) {
+	return getEffectParam<std::string>(id, param_name);
+}
+
+void DspServer::ProcessingGraph::activate(void) {
+	for(TEffectStackIt it = effectstack_.begin(); it != effectstack_.end(); it++) {
+		(*it)->activate();
+	}
+}
+
+void DspServer::ProcessingGraph::deactivate(void) {
+	for(TEffectStackIt it = effectstack_.begin(); it != effectstack_.end(); it++) {
+		(*it)->deactivate();
+	}
 }
 
 /* ************************************************************************** */

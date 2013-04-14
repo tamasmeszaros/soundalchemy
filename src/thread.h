@@ -12,6 +12,8 @@
 class Pthread;
 #endif
 
+#include "logs.h"
+
 namespace soundalchemy {
 
 #ifndef NULL
@@ -72,7 +74,7 @@ public:
 
 	bool isRunning(void) { return running_; }
 
-	int run(Runnable& r);
+	TAlchemyError run(Runnable& r);
 
 	void* getReturnValue(void) { return returnval_; }
 
@@ -82,9 +84,10 @@ public:
 
 protected:
 	Mutex * getConditionMutex(ConditionVariable& cond);
-	virtual int _run(Runnable& r) = 0;
+	virtual TAlchemyError _run(Runnable& r) = 0;
 	void* returnval_;
 	bool running_;
+	bool realtime_;
 };
 
 } /* namespace llaudio */

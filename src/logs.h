@@ -57,6 +57,9 @@ typedef enum e_errors
 	E_AUDIO,
 	E_INDEX,
 	E_SET_STREAM,
+	E_REALTIME,
+	E_THREAD,
+	E_PORTS_INCOMPATIBLE,
 	NUMERR,
 } TAlchemyError;
 
@@ -68,7 +71,10 @@ const char *const STR_ERRORS[NUMERR] = {
 		"A message buffering error occurred",
 		"Cannot start the audio pipeline",
 		"Index out of range or no such key exists",
-		"Cannot set the specified input or output stream"
+		"Cannot set the specified input or output stream",
+		"Cannot set real time priority!",
+		"Cannot start thread!"
+		"Effects cannot be connected, port count doesn't match!"
 };
 
 

@@ -16,6 +16,8 @@
 
 #include "predef.h"
 
+#include <cmath>
+
 namespace llaudio {
 
 /**
@@ -100,6 +102,48 @@ public:
 		 */
 		TSize getLength(void) { return frames_alloced_; }
 		bool fail_state_;
+
+
+		// map the unsigned fixed point sample buffer to a float buffer
+		// with samples ranging [-1.0, 1.0]
+		// float = -1 + 2 * uint / (2^width - 1)
+		template<class I> void unsigned2float(void) {
+			I *ptr = (I*) iraw_;
+			float w = exp2(format_alloced_.sample_width) - 1;
+			for(TSize i = 0; i < frames_alloced_*channels_alloced_; i++, ptr++)
+				rawfp_non_i_[i%channels_alloced_] [i/channels_alloced_] =
+						-1.0 + 2.0*((float) *ptr)/w;
+		};
+
+
+		// convert the float value to an unsigned fixed point sample with
+		// with bit length 'width'
+		// uint =  ( (float + 1) + (2^width -1) ) / 2
+		// class I is an unsigned integer type
+		template<class I> void float2unsigned(void) {
+			I *ptr = (I*) iraw_;
+			float w = exp2(format_alloced_.sample_width) - 1;
+			for(TSize i = 0; i < frames_alloced_*channels_alloced_; i++, ptr++)
+				*ptr = (I)  w*(rawfp_non_i_[i%channels_alloced_] [i/channels_alloced_]+1.0)/2.0;
+		};
+
+		// signed sample to a float
+		// float = 2 * int / 2^width
+		// I is a signed integer type
+		template<class I> void signed2float(void) {
+			I *ptr = (I*) iraw_;
+			float w = exp2(format_alloced_.sample_width);
+			for(TSize i = 0; i < frames_alloced_*channels_alloced_; i++, ptr++)
+				rawfp_non_i_[i%channels_alloced_] [i/channels_alloced_] = 2.0*((float) *ptr)/w;
+		}
+
+		// int = 2^width * float / 2
+		template<class I> void float2signed(void) {
+			I *ptr = (I*) iraw_;
+			float w = exp2(format_alloced_.sample_width);
+			for(TSize i = 0; i < frames_alloced_*channels_alloced_; i++, ptr++)
+				*ptr = (I) w * rawfp_non_i_[i%channels_alloced_] [i/channels_alloced_] / 2.0;
+		}
 
 	public:
 

@@ -11,15 +11,15 @@
 
 namespace soundalchemy {
 
-SoundEffect::SoundEffect():
-		unique_id_(generateUniqueID()) {}
+SoundEffect::SoundEffect(llaudio::TSampleRate sample_rate, std::string name):
+		name_(name), sample_rate_(sample_rate), mutex_(Thread::getMutex()){}
 
-SoundEffect::TEffectID SoundEffect::generateUniqueID(void) {
-	static TEffectID id = 0;
-	TEffectID ret = id;
-	id++;
-	return ret;
-}
+//SoundEffect::TEffectID SoundEffect::generateUniqueID(void) {
+//	static TEffectID id = 0;
+//	TEffectID ret = id;
+//	id++;
+//	return ret;
+//}
 
 SoundEffect::~SoundEffect() {
 	for(TParamVector::iterator p = params_.begin(); p != params_.end(); p++) {
@@ -33,6 +33,8 @@ SoundEffect::~SoundEffect() {
 	for(TPortVector::iterator p = outputs_.begin(); p != outputs_.end(); p++) {
 		delete *p;
 	}
+
+	delete mutex_;
 
 }
 
@@ -92,11 +94,39 @@ SoundEffect::Port * SoundEffect::getOutputPort(TPortID index) {
 	return outputs_[index];
 }
 
-MixerEffect::MixerEffect() {
+MixerEffect::MixerEffect(std::string name):SoundEffect(llaudio::SR_DEFAULT, name) {
 
 	Param *p = new MixerParam( "volume");
 	p->setValue(1.0);
 	addParam(p);
+}
+
+void MixerEffect::setInputsCount(unsigned int count) {
+
+	// do nothing if the count is already set
+	if( inputs_.size() == count ) return;
+
+	for(TPortVector::iterator it = inputs_.begin(); it != inputs_.end(); it++ ) {
+		delete (*it);
+	}
+	inputs_.clear();
+	for ( unsigned int i = 0; i < count; i++ ) {
+		addPort(new MixerPort(SoundEffect::INPUT_PORT, ""));
+	}
+}
+
+void MixerEffect::setOutputsCount(unsigned int count) {
+
+	// do nothing if the count is already set
+	if( inputs_.size() == count ) return;
+
+	for(TPortVector::iterator it = outputs_.begin(); it != outputs_.end(); it++ ) {
+		delete (*it);
+	}
+	outputs_.clear();
+	for ( unsigned int i = 0; i < count; i++ ) {
+		addPort(new MixerPort(SoundEffect::OUTPUT_PORT, ""));
+	}
 }
 
 void MixerEffect::process(unsigned int sample_count) {
@@ -117,8 +147,11 @@ void MixerEffect::process(unsigned int sample_count) {
 				// frame for channel A: frA
 				// frame for channel B: frB (next channel after A)
 				// frA = Volume*(frA+frB)/2
-				getOutputPort(j)->getBuffer() [i] =
-						getParam(0)->getValue() * ((getInputPort(j)->getBuffer() [i])+(getInputPort(j+1)->getBuffer() [i]))/2 ;
+				TSample * inbuff1 = getInputPort(j)->getBuffer();
+				TSample * inbuff2 = getInputPort(j+1)->getBuffer();
+				TSample * outbuff = getOutputPort(j)->getBuffer();
+				//outbuff [i] = 0.5 * (inbuff1 [i]);
+				outbuff [i] = getParam(0)->getValue() * ((inbuff1 [i]) + (inbuff2 [i]))*0.5 ;
 			}
 		}
 	}

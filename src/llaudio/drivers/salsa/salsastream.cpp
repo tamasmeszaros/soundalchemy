@@ -655,7 +655,7 @@ TErrors SalsaStream::connect( llaOutputStream* output, llaAudioPipe& buffer) {
 
 		wr_frames = snd_pcm_avail_update(salsaoutput->pcm_);
 		frames = wr_frames > lastwrite? lastwrite : wr_frames;
-		getRawInputBuffers( buffer, &iraw, &niraw);
+		getRawOutputBuffers( buffer, &iraw, &niraw);
 
 		if(salsaoutput->organization_ == SND_PCM_ACCESS_RW_NONINTERLEAVED) {
 			rc = snd_pcm_writen(salsaoutput->pcm_, (void**)niraw, frames);

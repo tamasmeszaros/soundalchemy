@@ -15,7 +15,7 @@
 
 #include "predef.h"
 #include "llacontainer.h"
-#include "llaaudiobuffer.h"
+#include "llaaudiopipe.h"
 
 
 namespace llaudio {

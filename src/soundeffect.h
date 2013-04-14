@@ -10,6 +10,7 @@
 #include <vector>
 #include <string>
 #include "llaudio/llaudio.h"
+#include "thread.h"
 
 namespace soundalchemy {
 
@@ -81,7 +82,7 @@ public:
 		 *
 		 * @param value
 		 */
-		virtual void setValue(double value) = 0;
+		virtual void setValue(TParamValue value) = 0;
 
 	};
 
@@ -107,7 +108,7 @@ public:
 		TPortDirection getDirection() { return dir_; }
 	};
 
-	SoundEffect();
+	SoundEffect(llaudio::TSampleRate sample_rate, std::string name = "");
 
 	virtual ~SoundEffect();
 
@@ -123,27 +124,31 @@ public:
 	Port* getOutputPort(TPortID index);
 	Port* getOutputPort(std::string name);
 
-	TEffectID getUniqueId() { return unique_id_; }
+	//TEffectID getId() { return id_; }
+	std::string getName(void) { return name_; }
 
 	virtual void process(unsigned int sample_count) = 0;
+
+	virtual void activate(void) = 0;
+	virtual void deactivate(void) = 0;
 
 	virtual void setSampleRate(llaudio::TSampleRate srate) {
 		sample_rate_ = srate;
 	}
 
+	virtual llaudio::TSampleRate getSampleRate() { return sample_rate_; }
 
+	//void setId(TEffectID index) { id_ = index; }
+
+	Mutex* getMutex() { return mutex_; }
 
 protected:
 
 	void addParam(Param *param);
 	void addPort(Port *port);
 
-
-	static TEffectID generateUniqueID(void);
-
-	TEffectID unique_id_;
-
-private:
+	//TEffectID id_;
+	std::string name_;
 
 	typedef std::vector<Port*> TPortVector;
 	typedef std::vector<Param*> TParamVector;
@@ -153,16 +158,17 @@ private:
 
 	TParamVector params_;
 	llaudio::TSampleRate sample_rate_;
+	Mutex *mutex_;
 
 };
 
 class MixerEffect: public SoundEffect {
 	class MixerParam: public Param {
-		double value_;
+		TParamValue value_;
 	public:
 		MixerParam( std::string name ): Param( name ) {}
 		double getValue() { return value_; }
-		void setValue(double value) { value_ = value; }
+		void setValue(TParamValue value) { value_ = value; }
 	};
 
 public:
@@ -177,9 +183,16 @@ public:
 		virtual TSample* getBuffer() { return buffer_; }
 	};
 
-	MixerEffect();
+	MixerEffect(std::string name = "");
 
 	void process(unsigned int sample_count);
+
+	virtual void activate(void) {};
+	virtual void deactivate(void) {};
+
+	void setInputsCount(unsigned int inputs);
+	void setOutputsCount(unsigned int outputs);
+
 };
 
 } /* namespace soundalchemy */

@@ -158,6 +158,132 @@ private:
 	void broadcastMessage(OutboundMessage& message);
 
 	/**
+	 * @brief Class encapsulating the processing graph.
+	 *
+	 * An object of this class is a map of audio effects connected together in
+	 * a specific scheme. This is a very simple implementation of an effect
+	 * chain. The input is strictly mono and the output is a stereo signal.
+	 * Effects are stacked in a list of SoundEffect objects and their audio ports
+	 * are connected on addition by the addEffect method. If there is a
+	 * mono/stereo incompatibility then a MixerEffect is inserted which resolves
+	 * it.
+	 */
+	class ProcessingGraph {
+		typedef std::vector<SoundEffect*> TEffectStack;
+		typedef TEffectStack::iterator TEffectStackIt;
+		typedef SoundEffect::TEffectID TEffectID;
+
+		class Input: public MixerEffect {
+		public:
+			Input();
+
+			llaInputStream* llainput;
+		} input_;
+
+		class Output: public MixerEffect {
+		public:
+			Output();
+
+			llaOutputStream* llaoutput;
+		} output_;
+
+
+		TEffectStack effectstack_;
+		Mutex *mutex_;
+
+		TSampleRate sample_rate_;
+		bool bypassed_;
+
+		SoundEffect* getEffectById(TEffectID id);
+
+		template<class T>
+		void setEffectParam(TEffectID id, T param,
+				SoundEffect::TParamValue value) {
+
+			SoundEffect *effect = getEffectById(id);
+			if( effect == NULL ) return;
+
+			SoundEffect::Param *p = effect->getParam(param);
+			if (p) {
+				effect->getMutex()->lock();
+				p->setValue(value);
+				effect->getMutex()->unlock();
+			}
+		}
+
+		template<class T>
+		SoundEffect::TParamValue getEffectParam(SoundEffect::TEffectID id,
+						T param) {
+
+			SoundEffect::TParamValue val = 0.0;
+			SoundEffect *effect = getEffectById(id);
+			if( effect == NULL ) return val;
+
+			SoundEffect::Param *p = effect->getParam(param);
+			if(p) {
+				effect->getMutex()->lock();
+				val = p->getValue();
+				effect->getMutex()->unlock();
+			}
+
+			return val;
+		}
+
+	public:
+
+		class Preset {
+
+		};
+
+		ProcessingGraph();
+		~ProcessingGraph() { delete mutex_; }
+
+		void setInput(llaInputStream& input) { input_.llainput = &input; }
+		void setOutput(llaOutputStream& output) { output_.llaoutput = &output; }
+
+		void setInputBuffer(SoundEffect::TSample **buffer, unsigned int channels);
+		void setOutputBuffer(SoundEffect::TSample **buffer, unsigned int channels);
+
+		void setSampleRate();
+		TSampleRate getSampleRate() { return sample_rate_; }
+
+		unsigned int getInputChannelsCount() { return input_.getInputsCount(); }
+		unsigned int getOutputChannelsCount() { return output_.getOutputsCount(); }
+
+		llaInputStream& getInput(void) { return *(input_.llainput); }
+		llaOutputStream& getOutput(void) { return *(output_.llaoutput); }
+
+		void traverse(unsigned int sample_count) ;
+
+		// position 0 means insert at the beginning
+		// position -1 is the end of the effect list
+		TAlchemyError addEffect(SoundEffect* effect, int position );
+
+		void removeEffect(TEffectID id);
+
+		void setEffectParam(TEffectID id, std::string param,
+				SoundEffect::TParamValue value);
+
+		void setEffectParam(TEffectID id, SoundEffect::TParamID param_name,
+						SoundEffect::TParamValue value);
+
+		SoundEffect::TParamValue getEffectParam(TEffectID id,
+				SoundEffect::TParamID param);
+
+		SoundEffect::TParamValue getEffectParam(TEffectID id,
+						std::string param_name);
+
+		void bypass(void);
+
+		void activate(void);
+		void deactivate(void);
+
+		void save(Preset& preset);
+		void load(Preset& preset);
+
+	} proc_graph_;
+
+	/**
 	 * This class represents the processing thread. It inherits the
 	 * llaAudioBuffer interface as a private base be able to overload specific
 	 * call-back functions as the onSamplesReady() method in which the
@@ -165,7 +291,7 @@ private:
 	 */
 	class DspProcess: public Runnable, private llaAudioPipe {
 	public:
-		DspProcess(DspServer& server);
+		DspProcess(ProcessingGraph& graph_);
 		~DspProcess() {
 			delete proc_thread_;
 		}
@@ -186,7 +312,7 @@ private:
 
 	private:
 		void waitFor() { proc_thread_->waitOn(state_); };
-		DspServer& dspserver_;
+		ProcessingGraph& graph_;
 
 		Thread *proc_thread_;
 		class State: public ConditionVariable {
@@ -203,65 +329,6 @@ private:
 
 	} dsp_process_;
 
-	class Input: public MixerEffect {
-	public:
-		Input();
-
-		llaInputStream* llainput;
-	};
-
-	class Output: public MixerEffect {
-	public:
-		Output();
-
-		llaOutputStream* llaoutput;
-	};
-
-	/**
-	 * @brief Class encapsulating the processing graph.
-	 *
-	 * An object of this class is a map of audio effects connected together in
-	 * a specific scheme. This is a very simple implementation of an effect
-	 * chain. The input is strictly mono and the output is a stereo signal.
-	 * Effects are stacked in a list of SoundEffect objects and their audio ports
-	 * are connected on addition by the addEffect method. If there is a
-	 * mono/stereo incompatibility then a MixerEffect is inserted which resolves
-	 * it.
-	 */
-	class ProcessingGraph {
-		typedef std::vector<SoundEffect*> TEffectStack;
-		typedef TEffectStack::iterator TEffectStackIt;
-
-		TEffectStack effectstack_;
-		Mutex *mutex_;
-		Input input_;
-		Output output_;
-		TSampleRate sample_rate_;
-	public:
-
-		ProcessingGraph();
-		~ProcessingGraph() { delete mutex_; }
-
-		void setInput(llaInputStream& input) { input_.llainput = &input; }
-		void setOutput(llaOutputStream& output) { output_.llaoutput = &output; }
-
-		void setInputBuffer(SoundEffect::TSample *buffer);
-		void setOutputBuffer(SoundEffect::TSample *buffer_left,
-				SoundEffect::TSample *buffer_right);
-
-		void setSampleRate();
-		TSampleRate getSampleRate() { return sample_rate_; }
-
-		unsigned int getInputChannelsCount() { return input_.getInputsCount(); }
-		unsigned int getOutputChannelsCount() { return output_.getOutputsCount(); }
-
-		llaInputStream& getInput(void) { return *(input_.llainput); }
-		llaOutputStream& getOutput(void) { return *(output_.llaoutput); }
-
-		void traverse(unsigned int sample_count) ;
-
-		void addEffect(SoundEffect* effect);
-	} proc_graph_;
 
 
 	/**

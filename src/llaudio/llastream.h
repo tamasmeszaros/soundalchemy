@@ -14,7 +14,7 @@
 #define LLASTREAM_H_
 
 #include "predef.h"
-#include "llaaudiobuffer.h"
+#include "llaaudiopipe.h"
 #include "lladevice.h"
 
 // TODO replace this with a generic llaFile interface to not depend on this

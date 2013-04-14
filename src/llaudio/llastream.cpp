@@ -5,7 +5,7 @@
  *      Author: Mészáros Tamás
  */
 #include "llastream.h"
-#include "llaaudiobuffer.h"
+#include "llaaudiopipe.h"
 #include "lladevicemanager.h"
 #include <string>
 

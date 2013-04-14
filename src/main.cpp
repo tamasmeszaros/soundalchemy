@@ -66,4 +66,6 @@ int main(int argc, const char * argv[] )
 	dspserver.startListening();
 
 	freeLogs();
+
+	return 0;
 }

@@ -11,11 +11,10 @@
  *     Mészáros Tamás - initial API and implementation
  */
 
-#include "llaaudiobuffer.h"
+#include "llaaudiopipe.h"
 #include "llastream.h"
 #include "lladevicemanager.h"
 #include <stdint.h>
-#include <cmath>
 
 using namespace llaudio;
 
@@ -83,27 +82,28 @@ float** llaudio::llaAudioPipe::Buffer::getSamples( void ) {
 					rawfp_non_i_[i%channels_alloced_] [i/channels_alloced_] = *iraw_;
 				}
 			}
-			else { // fixed point
+			else if(!format_alloced_.isSigned()) { // fixed point unsigned
 				switch(format_alloced_.sample_width) {
-				case 16: {
-					uint16_t *ptr = (uint16_t*) iraw_;
-					for(TSize i = 0; i < frames_alloced_*channels_alloced_; i++, ptr++)
-						rawfp_non_i_[i%channels_alloced_] [i/channels_alloced_] =
-						-1.0 + 2.0*ceil((float) *ptr)/exp2(format_alloced_.sample_width);
-
-					}
+				case 16:
+					unsigned2float<uint16_t>();
 					break;
 				case 24:
-				case 32: {
-					uint32_t *ptr = (uint32_t*) iraw_;
-					for(TSize i = 0; i < frames_alloced_*channels_alloced_; i++, ptr++)
-						rawfp_non_i_[i%channels_alloced_] [i/channels_alloced_] =
-							-1.0 + 2.0*((float) *ptr)/exp2(format_alloced_.sample_width);
-					}
+				case 32:
+					unsigned2float<uint32_t>();
 					break;
-
 				} // switch
-			} // fixed point
+			} // fixed point unsigned
+			else { // fixed point signed
+				switch(format_alloced_.sample_width) {
+				case 16:
+					signed2float<int16_t>();
+					break;
+				case 24:
+				case 32:
+					signed2float<int32_t>();
+					break;
+				} // switch
+			}
 		} else {
 			// not matching endianness
 		}
@@ -178,25 +178,32 @@ void llaudio::llaAudioPipe::Buffer::writeSamples() {
 				for(TSize i = 0; i < frames_alloced_*channels_alloced_; i++, ptr++) {
 					*iraw_ = rawfp_non_i_[i%channels_alloced_] [i/channels_alloced_];
 				}
-			} else {
-				// fixed point
+			} else if( !format_alloced_.isSigned()) {
+				// fixed point unsigned
+
 				switch(format_alloced_.sample_width) {
-				case 16: {
-					uint16_t *ptr = (uint16_t*) iraw_;
-					for(TSize i = 0; i < frames_alloced_*channels_alloced_; i++, ptr++)
-						*ptr = (uint16_t) floor(exp2(format_alloced_.sample_width)*(rawfp_non_i_[i%channels_alloced_] [i/channels_alloced_]+1.0)/2.0);
-					}
+				case 16:
+					float2unsigned<uint16_t>();
 					break;
 				case 24:
-				case 32: {
-					uint32_t *ptr = (uint32_t*) iraw_;
-					for(TSize i = 0; i < frames_alloced_*channels_alloced_; i++, ptr++)
-						*ptr = exp2(format_alloced_.sample_width)*(rawfp_non_i_[i%channels_alloced_] [i/channels_alloced_]+1.0)/2.0;
-					}
+				case 32:
+					float2unsigned<uint32_t>();
 					break;
 
 				}
-			} // fixed / floating
+			} else {
+				// fixed point signed
+				switch(format_alloced_.sample_width) {
+				case 16:
+					float2signed<int16_t>();
+					break;
+				case 24:
+				case 32:
+					float2signed<int32_t>();
+					break;
+
+				}
+			}
 		} // endianness
 	}
 

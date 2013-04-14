@@ -6,9 +6,13 @@
  */
 
 #include "thread.h"
+
 #ifdef __linux__
 #include <pthread.h>
 #endif
+
+#include <errno.h>
+#include <string.h>
 
 namespace soundalchemy {
 
@@ -16,17 +20,17 @@ Thread::Thread() {
 	// TODO Auto-generated constructor stub
 	running_ = false;
 	returnval_ = NULL;
+	realtime_ = false;
 }
 
 Thread::~Thread() {
 	// TODO Auto-generated destructor stub
 }
 
-int Thread::run(Runnable& r) {
-	int ret;
+TAlchemyError Thread::run(Runnable& r) {
+	TAlchemyError ret;
 	running_ = true;
 	ret = _run(r);
-	running_ = false;
 	return ret;
 }
 
@@ -123,17 +127,43 @@ public:
 
 	}
 
-	virtual int _run(Runnable& r) {
+	virtual TAlchemyError _run(Runnable& r) {
 		RunArg *arg = new RunArg();
 		arg->runnable = &r;
 		arg->thread = this;
 		int ret = 0;
+		TAlchemyError retval = E_OK;
 
-		if( thread_ != pthread_self())
+		if( thread_ != pthread_self()) {
 			ret = pthread_create(&thread_, &thread_attr_, proc, arg );
+			if( ret == EPERM ){
+				log(LEVEL_WARNING, "%s %s", STR_ERRORS[E_REALTIME], "based on EPERM");
+				retval = E_REALTIME;
+			}else if( ret) {
+				log(LEVEL_ERROR, STR_ERRORS[E_THREAD]);
+				retval = E_THREAD;
+			}else if(realtime_) {
+
+				int policy;
+				sched_param p;
+				p.__sched_priority = 99;
+				int schedret = pthread_setschedparam(thread_, SCHED_RR, &p);
+
+					log(LEVEL_ERROR, strerror(schedret));
+
+//				pthread_attr_getschedparam(&thread_attr_, &p);
+//				pthread_attr_getschedpolicy(&thread_attr_, &policy);
+				pthread_getschedparam(thread_, &policy, &p);
+				if(policy != SCHED_RR || p.__sched_priority != 99) {
+
+					log(LEVEL_WARNING, "Cannot set real time priority!");
+					retval = E_REALTIME;
+				}
+			}
+		}
 		else returnval_ = r.run();
 
-		return ret;
+		return retval;
 	}
 
 	int wakeUp(void) {
@@ -162,8 +192,12 @@ public:
 //		{
 //			log(LEVEL_WARNING,"Cannot set real time policy!");
 //		}
-
-		return pthread_attr_setschedpolicy(&thread_attr_, SCHED_RR);
+		realtime_ = true;
+		sched_param p;
+		p.__sched_priority = 99;
+		int ret = pthread_attr_setschedpolicy(&thread_attr_, SCHED_RR);
+		pthread_attr_setschedparam(&thread_attr_, &p);
+		return ret;
 	}
 
 
@@ -180,6 +214,7 @@ private:
 		void* ret = rarg->thread->returnval_;
 		delete rarg;
 		//std::cout<< "proc end" << std::endl;
+		rarg->thread->running_ = false;
 		return ret;
 	}
 

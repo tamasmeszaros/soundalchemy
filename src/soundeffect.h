@@ -59,9 +59,22 @@ public:
 		// with the addParam() method
 		friend class SoundEffect;
 
+	protected:
+
+		// the parent effect of this parameter
+		SoundEffect* parent_effect_;
+
 	public:
+
+		typedef enum {
+			PARAM_INTEGER,
+			PARAM_SAMPLE_RATE,
+			PARAM_TOGGLE,
+			PARAM_CONTINOUS,
+		} TParamType;
+
 		/// constructor
-		Param(std::string name = ""): name_(name) {}
+		Param(const std::string name = ""): name_(name), parent_effect_(NULL) {}
 
 		/// virtual destructor
 		virtual ~Param() {}
@@ -84,6 +97,15 @@ public:
 		 */
 		virtual void setValue(TParamValue value) = 0;
 
+		virtual TParamValue getDefault() = 0;
+
+		virtual TParamValue getMin() { return 0.0f; }
+
+		virtual TParamValue getMax() { return 1.0f; }
+
+		virtual bool isLogarithmic() { return false; }
+
+		virtual TParamType getType() { return PARAM_CONTINOUS; }
 	};
 
 	class Port {
@@ -95,9 +117,15 @@ public:
 		// The ID is set by the SoundEffect object when the port is added
 		// with the addPort() method
 		friend class SoundEffect;
+
+	protected:
+
+		// the parent effect of this port
+		SoundEffect* parent_effect_;
+
 	public:
-		Port(TPortDirection dir, std::string name = ""): dir_(dir),
-				name_(name) {}
+		Port( TPortDirection dir, const std::string name = ""): dir_(dir),
+				name_(name), parent_effect_(NULL) {}
 
 		virtual ~Port() {}
 
@@ -108,7 +136,7 @@ public:
 		TPortDirection getDirection() { return dir_; }
 	};
 
-	SoundEffect(llaudio::TSampleRate sample_rate, std::string name = "");
+	SoundEffect(llaudio::TSampleRate sample_rate, const std::string name = "");
 
 	virtual ~SoundEffect();
 
@@ -142,6 +170,10 @@ public:
 
 	Mutex* getMutex() { return mutex_; }
 
+	void switchOn(void) { on_ = true; }
+	void switchOff(void) { on_ = false; }
+	bool isOn(void) { return on_; }
+
 protected:
 
 	void addParam(Param *param);
@@ -160,15 +192,18 @@ protected:
 	llaudio::TSampleRate sample_rate_;
 	Mutex *mutex_;
 
+	bool on_;
+
 };
 
 class MixerEffect: public SoundEffect {
 	class MixerParam: public Param {
 		TParamValue value_;
 	public:
-		MixerParam( std::string name ): Param( name ) {}
+		MixerParam( const std::string name ): Param( name ) {}
 		double getValue() { return value_; }
 		void setValue(TParamValue value) { value_ = value; }
+		TParamValue getDefault(void) { return 1.0f; }
 	};
 
 public:
@@ -176,14 +211,14 @@ public:
 	class MixerPort: public Port {
 		TSample *buffer_;
 	public:
-		MixerPort(TPortDirection dir, std::string name, TSample *buffer = NULL ):
+		MixerPort(TPortDirection dir, const std::string name, TSample *buffer = NULL ):
 			Port(dir, name), buffer_(buffer) {}
 		virtual void connect(Port& port) { buffer_ = port.getBuffer(); }
 
 		virtual TSample* getBuffer() { return buffer_; }
 	};
 
-	MixerEffect(std::string name = "");
+	MixerEffect(const std::string name = "");
 
 	void process(unsigned int sample_count);
 

@@ -11,15 +11,9 @@
 
 namespace soundalchemy {
 
-SoundEffect::SoundEffect(llaudio::TSampleRate sample_rate, std::string name):
-		name_(name), sample_rate_(sample_rate), mutex_(Thread::getMutex()){}
-
-//SoundEffect::TEffectID SoundEffect::generateUniqueID(void) {
-//	static TEffectID id = 0;
-//	TEffectID ret = id;
-//	id++;
-//	return ret;
-//}
+SoundEffect::SoundEffect(llaudio::TSampleRate sample_rate, const std::string name):
+		name_(name), sample_rate_(sample_rate), mutex_(Thread::getMutex()),
+		on_(true){}
 
 SoundEffect::~SoundEffect() {
 	for(TParamVector::iterator p = params_.begin(); p != params_.end(); p++) {
@@ -41,12 +35,16 @@ SoundEffect::~SoundEffect() {
 void SoundEffect::addParam(Param *param) {
 	if( param != NULL ) {
 		param->id_ = params_.size();
+		param->parent_effect_ = this;
 		params_.push_back(param);
+		param->setValue(param->getDefault());
 	}
 }
 
 void SoundEffect::addPort(Port *port) {
 	if(port != NULL ) {
+		port->id_ = outputs_.size();
+		port->parent_effect_ = this;
 		if(port->getDirection() == INPUT_PORT) inputs_.push_back(port);
 		else outputs_.push_back(port);
 	}
@@ -94,10 +92,9 @@ SoundEffect::Port * SoundEffect::getOutputPort(TPortID index) {
 	return outputs_[index];
 }
 
-MixerEffect::MixerEffect(std::string name):SoundEffect(llaudio::SR_DEFAULT, name) {
+MixerEffect::MixerEffect(const std::string name):SoundEffect(llaudio::SR_DEFAULT, name) {
 
 	Param *p = new MixerParam( "volume");
-	p->setValue(1.0);
 	addParam(p);
 }
 

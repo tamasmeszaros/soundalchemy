@@ -29,6 +29,13 @@ public:
 	static const snd_pcm_stream_t INPUT_STREAM;
 	static const snd_pcm_stream_t OUTPUT_STREAM;
 
+	enum playback_settings {
+		REAL_BUFFER_SIZE_MIN = 1024,
+		REAL_PERIOD_SIZE_MIN = 32,
+		REAL_PERIOD_SIZE_MAX = 256,
+		BUFFER_SIZE_MULTIPLIER = 2
+	};
+
 
 	typedef enum  {
 		CLOSED,
@@ -95,6 +102,7 @@ private:
 	TChannels channels_;
 	snd_pcm_format_t format_;
 	snd_pcm_uframes_t buffer_size_;
+	snd_pcm_uframes_t period_size_;
 	snd_pcm_access_t organization_;
 
 

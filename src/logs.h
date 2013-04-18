@@ -60,6 +60,7 @@ typedef enum e_errors
 	E_REALTIME,
 	E_THREAD,
 	E_PORTS_INCOMPATIBLE,
+	E_DATABASE,
 	NUMERR,
 } TAlchemyError;
 
@@ -73,8 +74,9 @@ const char *const STR_ERRORS[NUMERR] = {
 		"Index out of range or no such key exists",
 		"Cannot set the specified input or output stream",
 		"Cannot set real time priority!",
-		"Cannot start thread!"
-		"Effects cannot be connected, port count doesn't match!"
+		"Cannot start thread!",
+		"Effects cannot be connected, port count doesn't match!",
+		"Cannot load database!",
 };
 
 

@@ -110,7 +110,8 @@ public:
 		template<class I> void unsigned2float(void) {
 			I *ptr = (I*) iraw_;
 			float w = exp2(format_alloced_.sample_width) - 1;
-			for(TSize i = 0; i < frames_alloced_*channels_alloced_; i++, ptr++)
+			TSize cycles = frames_alloced_*channels_alloced_;
+			for(TSize i = 0; i < cycles; i++, ptr++)
 				rawfp_non_i_[i%channels_alloced_] [i/channels_alloced_] =
 						-1.0 + 2.0*((float) *ptr)/w;
 		};
@@ -123,7 +124,8 @@ public:
 		template<class I> void float2unsigned(void) {
 			I *ptr = (I*) iraw_;
 			float w = exp2(format_alloced_.sample_width) - 1;
-			for(TSize i = 0; i < frames_alloced_*channels_alloced_; i++, ptr++)
+			TSize cycles = frames_alloced_*channels_alloced_;
+			for(TSize i = 0; i < cycles; i++, ptr++)
 				*ptr = (I)  w*(rawfp_non_i_[i%channels_alloced_] [i/channels_alloced_]+1.0)/2.0;
 		};
 
@@ -133,7 +135,8 @@ public:
 		template<class I> void signed2float(void) {
 			I *ptr = (I*) iraw_;
 			float w = exp2(format_alloced_.sample_width);
-			for(TSize i = 0; i < frames_alloced_*channels_alloced_; i++, ptr++)
+			TSize cycles = frames_alloced_*channels_alloced_;
+			for(TSize i = 0; i < cycles; i++, ptr++)
 				rawfp_non_i_[i%channels_alloced_] [i/channels_alloced_] = 2.0*((float) *ptr)/w;
 		}
 
@@ -141,7 +144,8 @@ public:
 		template<class I> void float2signed(void) {
 			I *ptr = (I*) iraw_;
 			float w = exp2(format_alloced_.sample_width);
-			for(TSize i = 0; i < frames_alloced_*channels_alloced_; i++, ptr++)
+			TSize cycles = frames_alloced_*channels_alloced_;
+			for(TSize i = 0; i < cycles; i++, ptr++)
 				*ptr = (I) w * rawfp_non_i_[i%channels_alloced_] [i/channels_alloced_] / 2.0;
 		}
 
@@ -157,6 +161,7 @@ public:
 		TSampleFormat formatRequested;
 
 		Buffer();
+		virtual ~Buffer() {}
 
 		/**
 		 *
@@ -183,7 +188,7 @@ public:
 		 * in the buffer.
 		 * @return Returns a channels*frames dimensional float matrix
 		 */
-		float** getSamples( void );
+		virtual float** getSamples( void );
 
 
 		void writeSamples();
@@ -193,6 +198,12 @@ public:
 
 		bool isAlloced() { return buffer_alloced_; }
 
+	};
+
+	class OutputBuffer: public Buffer {
+	public:
+		// no need for converting empty raw samples
+		float** getSamples() { return rawfp_non_i_;}
 	};
 
 	////////////////////////////////////////////////////////////////////////////
@@ -277,7 +288,7 @@ protected:
 private:
 
 	Buffer input_buffer_;
-	Buffer output_buffer_;
+	OutputBuffer output_buffer_;
 
 	TSize frames_count_;
 

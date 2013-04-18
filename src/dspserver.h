@@ -18,11 +18,11 @@
 #include "clientconnector.h"
 #include "thread.h"
 #include "soundeffect.h"
+#include "effectdatabase.h"
 
 #include <queue>
 #include <signal.h>
 #include "llaudio/llaudio.h"
-
 
 using namespace llaudio;
 
@@ -84,13 +84,13 @@ public:
 	 *
 	 * @return
 	 */
-	llaInputStream& getInputStream(void) { return proc_graph_.getInput(); }
+	llaInputStream& getInputStream(void) { return effect_chain_.getInput(); }
 
 	/**
 	 *
 	 * @return
 	 */
-	llaOutputStream& getOutputStream(void) {  return proc_graph_.getOutput(); }
+	llaOutputStream& getOutputStream(void) {  return effect_chain_.getOutput(); }
 
 	/**
 	 *
@@ -158,21 +158,174 @@ private:
 	void broadcastMessage(OutboundMessage& message);
 
 	/**
-	 * @brief Class encapsulating the processing graph.
+	 * This class represents a separate audio processing thread. It inherits the
+	 * llaAudioPipe interface as a private base to be able to overload specific
+	 * call-back functions as the onSamplesReady() method in which the
+	 * processing is taking place.
 	 *
-	 * An object of this class is a map of audio effects connected together in
-	 * a specific scheme. This is a very simple implementation of an effect
-	 * chain. The input is strictly mono and the output is a stereo signal.
-	 * Effects are stacked in a list of SoundEffect objects and their audio ports
-	 * are connected on addition by the addEffect method. If there is a
-	 * mono/stereo incompatibility then a MixerEffect is inserted which resolves
-	 * it.
+	 * The Runnable base class ensures that this class can be passed to a Thread
+	 * object's run method.
 	 */
-	class ProcessingGraph {
+	class DspProcess: public Runnable, private llaAudioPipe {
+	public:
+
+		/**
+		 * Generic Interface for a Graph of audio filters. The DspProcess will
+		 * process this graph when the startProcessing method is called.
+		 * The implementation of the graph is not concerned.
+		 */
+		class ProcessingGraph {
+		public:
+
+			/**
+			 * Setting the input buffer to the Graph.
+			 * @param buffer A sample matrix with channels*samples dimensions.
+			 * @param channels The count of audio channels.
+			 */
+			virtual void setInputBuffer(SoundEffect::TSample **buffer,
+					unsigned int channels) = 0;
+
+			/**
+			 * Setting the output buffers where the final audio data will be
+			 * copied.
+			 * @param buffer A sample matrix with channels*samples dimensions.
+			 * @param channels The count of audio channels.
+			 */
+			virtual void setOutputBuffer(SoundEffect::TSample **buffer,
+					unsigned int channels) = 0;
+
+			/**
+			 * Retrieves the input llaudio stream.
+			 * @return Returns a reference to an llaInputStream object.
+			 */
+			virtual llaInputStream& getInput(void) = 0;
+
+			/**
+			 * Retrieves the output llaudio stream.
+			 * @return Returns a reference to an llaOutputStream object.
+			 */
+			virtual llaOutputStream& getOutput(void) = 0;
+
+			/**
+			 * Several real time audio plug-ins have to be activated before
+			 * they are used for processing. This method has to activate all
+			 * the plug-ins in the graph and called right before the processing
+			 * is started.
+			 */
+			virtual void activate(void) = 0;
+
+			/**
+			 * The opposite of activate(). The method has to be called right
+			 * after the processing is stopped.
+			 */
+			virtual void deactivate(void) = 0;
+
+			/**
+			 * This method will traverse the graph and call the process (or
+			 * or similar) method of the filter.
+			 * @param sample_count The count of samples which will be processed.
+			 */
+			virtual void traverse(unsigned int sample_count) = 0;
+
+			virtual ~ProcessingGraph() {}
+		};
+
+		DspProcess(ProcessingGraph& graph);
+		~DspProcess() {
+			delete proc_thread_;
+		}
+
+		/**
+		 * Retrieves the state of the processing. This method has to be
+		 * surrounded with a lock() and an unlock() function call to avoid
+		 * the threads to slap on each others foot.
+		 * @return Returns the state of processing.
+		 */
+		TProcessingState getState(void) { return (TProcessingState) state_.val; }
+
+		/**
+		 * The overloaded method of the Runnable base class.
+		 */
+		void* run(void);
+
+		/**
+		 * This method will start the processing in a separate thred of execution.
+		 * @return Returns an error code from TAlchemyError or E_OK if the
+		 * processing started without problem. The function will block for a
+		 * short period of time to wait for a response from the processing thread.
+		 */
+		TAlchemyError startProcessing(void);
+
+		/**
+		 * Stops the processing.
+		 */
+		void stopProcessing( void );
+
+
+		void lock() { state_.lock(); }
+		void unlock() { state_.unlock(); }
+
+
+	private:
+
+		/*
+		 * Overloaded from llaAudioPipe. This method is where the processing is
+		 * done.
+		 */
+		void onSamplesReady(void);
+
+		// Overloaded. Returns true if the processing has to stop. Triggered by
+		// stopProcessing() method.
+		bool stop(void);
+
+		// waits for the proc. thread for a response.
+		void waitFor() { proc_thread_->waitOn(state_); };
+
+		// the processing graph
+		ProcessingGraph& graph_;
+
+		// the thread object which hosts the processing.
+		Thread *proc_thread_;
+
+		// Synchronization facility for the state of the processing
+		class State: public ConditionVariable {
+			Thread *thread_;
+		public:
+			State(Thread* th): thread_(th) {}
+			TProcessingState val;
+			TProcessingState state_requested_;
+			bool isTrue(void) { return thread_->isRunning(); }
+		} state_;
+
+		// counter for the onSamplesReady method. If called
+		// several times successfully than the processing probably runs fine.
+		// and ready to send a response to the caller of startProcessing.
+		unsigned int callback_counter_;
+
+	} dsp_process_;
+
+	/**
+	 * @brief A class implementing a simple processing graph.
+	 *
+	 * This is a very simple implementation of an effect chain. The input is
+	 * strictly mono and the output is a stereo signal. Effects are stacked in
+	 * a list of SoundEffect objects and their audio ports are connected on
+	 * addition by the addEffect method.
+	 */
+	class EffectChain : public DspProcess::ProcessingGraph {
+
+		// typedef for the list data structure which is an stl vector for a
+		// constant complexity of reaching the effects.
 		typedef std::vector<SoundEffect*> TEffectStack;
+
+		// Iterator for the list.
 		typedef TEffectStack::iterator TEffectStackIt;
+
+		// This type is used as an index of an effect in the effect list.
 		typedef SoundEffect::TEffectID TEffectID;
 
+		// The input is a mixer effect with an llaudio input stream
+		// representing the output interface.
 		class Input: public MixerEffect {
 		public:
 			Input();
@@ -180,6 +333,7 @@ private:
 			llaInputStream* llainput;
 		} input_;
 
+		// The output is a MixerEffect with an llaudio output stream.
 		class Output: public MixerEffect {
 		public:
 			Output();
@@ -187,15 +341,23 @@ private:
 			llaOutputStream* llaoutput;
 		} output_;
 
-
+		// the actual effect list
 		TEffectStack effectstack_;
+
+		// A mutex for synchronizing parameter changes an effect addition if
+		// the processing is in progress.
 		Mutex *mutex_;
 
+		// The sample rate used in the processing.
 		TSampleRate sample_rate_;
+
+		// A switch for bypass.
 		bool bypassed_;
 
+		// Returns a SoundEffect object by the ID. ID 0 is the input effect
 		SoundEffect* getEffectById(TEffectID id);
 
+		// Set the value of the effect parameter by the parameter's ID or name
 		template<class T>
 		void setEffectParam(TEffectID id, T param,
 				SoundEffect::TParamValue value) {
@@ -211,6 +373,7 @@ private:
 			}
 		}
 
+		// Same for getting the parameter's value.
 		template<class T>
 		SoundEffect::TParamValue getEffectParam(SoundEffect::TEffectID id,
 						T param) {
@@ -235,9 +398,10 @@ private:
 
 		};
 
-		ProcessingGraph();
-		~ProcessingGraph() { delete mutex_; }
+		EffectChain();
+		~EffectChain() { delete mutex_; }
 
+		/// See the ProcessingGraph class for more description.
 		void setInput(llaInputStream& input) { input_.llainput = &input; }
 		void setOutput(llaOutputStream& output) { output_.llaoutput = &output; }
 
@@ -257,7 +421,7 @@ private:
 
 		// position 0 means insert at the beginning
 		// position -1 is the end of the effect list
-		TAlchemyError addEffect(SoundEffect* effect, int position );
+		TAlchemyError addEffect(SoundEffect* effect, int position = -1 );
 
 		void removeEffect(TEffectID id);
 
@@ -281,55 +445,7 @@ private:
 		void save(Preset& preset);
 		void load(Preset& preset);
 
-	} proc_graph_;
-
-	/**
-	 * This class represents the processing thread. It inherits the
-	 * llaAudioBuffer interface as a private base be able to overload specific
-	 * call-back functions as the onSamplesReady() method in which the
-	 * processing is taking place.
-	 */
-	class DspProcess: public Runnable, private llaAudioPipe {
-	public:
-		DspProcess(ProcessingGraph& graph_);
-		~DspProcess() {
-			delete proc_thread_;
-		}
-
-		TProcessingState getState(void) { return (TProcessingState) state_.val; }
-		void* run(void);
-
-		TAlchemyError startProcessing(void);
-		void stopProcessing( void);
-
-		// overloaded
-		void onSamplesReady(void);
-		bool stop(void);
-
-		void lock() { state_.lock(); }
-		void unlock() { state_.unlock(); }
-
-
-	private:
-		void waitFor() { proc_thread_->waitOn(state_); };
-		ProcessingGraph& graph_;
-
-		Thread *proc_thread_;
-		class State: public ConditionVariable {
-			Thread *thread_;
-		public:
-			State(Thread* th): thread_(th) {}
-			TProcessingState val;
-			TProcessingState state_requested_;
-			bool isTrue(void) { return thread_->isRunning(); }
-		} state_;
-
-		unsigned int callback_counter_;
-
-
-	} dsp_process_;
-
-
+	} effect_chain_;
 
 	/**
 	 * @class MessageQueue
@@ -402,6 +518,9 @@ private:
 
 	// The audio interface manager
 	static llaDeviceManager& lla_devman_;
+
+	// The effect database
+	static EffectDatabase* database_;
 
 	// the unique name of the sound device used for processing
 	const char* device_name_;

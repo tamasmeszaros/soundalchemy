@@ -29,7 +29,7 @@ llaInputStream::connect( llaOutputStream* output, llaAudioPipe& buffer) {
 		if(ret == E_OK) {
 			ret = read(buffer);
 			if(ret != E_OK) break;
-			buffer.onSamplesReady();
+			//buffer.onSamplesReady();
 			ret = output->write(buffer);
 			if(ret != E_OK) break;
 		}

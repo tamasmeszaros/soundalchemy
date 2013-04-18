@@ -65,9 +65,8 @@ TAlchemyError ClientConnector::watch(void) {
 
 void ClientConnector::stopWatching(void) {
 	mutex_->lock(); watching_ = false; mutex_->unlock();
-	Thread* current = Thread::getCurrent();
-	thread_->join(*current);
-	delete current;
+	thread_->join();
+
 }
 
 

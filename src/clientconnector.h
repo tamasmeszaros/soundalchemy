@@ -33,12 +33,11 @@ public:
 
 	virtual void send(OutboundMessage& message) = 0;
 
-	TAlchemyError watch(void);
+	virtual TAlchemyError watch(void);
 
-	// not really functional
-	void stopWatching(void);
+	virtual void stopWatching(void);
 
-	bool isWatching();
+	virtual bool isWatching();
 
 	std::string& getName() { return name_; }
 	void setChannelId(Message::TChannelID chid) { channel_id_ = chid; }

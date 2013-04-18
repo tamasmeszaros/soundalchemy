@@ -60,19 +60,29 @@ protected:
 extern ConditionVariable COND_TRUE;
 
 class Thread {
+protected:
+	class RunCondition: public ConditionVariable {
+	public:
+		bool running_;
+		RunCondition():running_(false) {}
+		virtual bool isTrue(void) { return running_; }
+	} running_cond_;
 public:
 
 	Thread();
 
 	virtual ~Thread();
 
-	virtual void waitOn(ConditionVariable& c = COND_TRUE, int timeout = -1 ) = 0;
+	virtual void waitOn(ConditionVariable& c, int timeout = -1 ) = 0;
+	void waitOn(int timeout = -1) {
+		this->waitOn(running_cond_);
+	}
 	virtual int wakeUp(void) = 0;
 	virtual int wakeUpAll(void) = 0;
-	virtual void* join(Thread& thread) = 0;
+	virtual void* join() = 0;
 	virtual int setRealtime(bool realtime = true) = 0;
 
-	bool isRunning(void) { return running_; }
+	bool isRunning(void);
 
 	TAlchemyError run(Runnable& r);
 
@@ -86,8 +96,8 @@ protected:
 	Mutex * getConditionMutex(ConditionVariable& cond);
 	virtual TAlchemyError _run(Runnable& r) = 0;
 	void* returnval_;
-	bool running_;
 	bool realtime_;
+
 };
 
 } /* namespace llaudio */

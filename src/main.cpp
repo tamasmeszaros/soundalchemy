@@ -58,6 +58,7 @@ int main(int argc, const char * argv[] )
 	initLogs();
 	//enableDebug();
 	log(LEVEL_INFO, "Sound Alchemy started in service mode");
+	log(LEVEL_INFO, "buffer size: %d", llaudio::DEFAULT_BUFFER_SIZE);
 	DspServer dspserver;
 
 	AndroidConnector android;

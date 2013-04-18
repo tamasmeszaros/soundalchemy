@@ -13,6 +13,18 @@
 
 namespace soundalchemy {
 
+SoundEffect::TParamValue LADSPAEffect::LADSPAParam::getDefault(void) {
+	LADSPA_Data v = 0.0f;
+
+	if(parent_effect_ == NULL ) return v;
+	else {
+		getLADSPADefault(&range_hint_,
+				(unsigned long) parent_effect_->getSampleRate(), &v);
+	}
+
+	return v;
+}
+
 LADSPAEffect::LADSPAEffect(const LADSPA_Descriptor& descriptor,
 		llaudio::TSampleRate srate): SoundEffect(srate, descriptor.Label),
 	plugin_descriptor_(descriptor) {
@@ -21,11 +33,11 @@ LADSPAEffect::LADSPAEffect(const LADSPA_Descriptor& descriptor,
 			getSampleRate());
 
 	// set up parameters and ports
-	LADSPA_PortDescriptor pd;
+
 	for(unsigned int i = 0; i < plugin_descriptor_.PortCount; i++) {
-		pd = plugin_descriptor_.PortDescriptors[i];
+		const LADSPA_PortDescriptor& pd = plugin_descriptor_.PortDescriptors[i];
 		const char * name = plugin_descriptor_.PortNames[i];
-		LADSPA_PortRangeHint range_hint = plugin_descriptor_.PortRangeHints[i];
+		const LADSPA_PortRangeHint& range_hint = plugin_descriptor_.PortRangeHints[i];
 		if( LADSPA_IS_PORT_AUDIO(pd) ) {
 			TPortDirection dir = LADSPA_IS_PORT_INPUT(pd)? INPUT_PORT : OUTPUT_PORT;
 			LADSPAPort *port = new LADSPAPort(dir, name, range_hint,

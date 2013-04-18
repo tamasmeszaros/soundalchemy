@@ -17,19 +17,24 @@
 namespace soundalchemy {
 
 Thread::Thread() {
-	// TODO Auto-generated constructor stub
-	running_ = false;
 	returnval_ = NULL;
 	realtime_ = false;
 }
 
 Thread::~Thread() {
-	// TODO Auto-generated destructor stub
+}
+
+bool Thread::isRunning(void) {
+	bool r;
+	running_cond_.lock();
+	r = running_cond_.running_;
+	running_cond_.unlock();
+	return r;
 }
 
 TAlchemyError Thread::run(Runnable& r) {
 	TAlchemyError ret;
-	running_ = true;
+	running_cond_.lock(); running_cond_.running_ = true; running_cond_.unlock();
 	ret = _run(r);
 	return ret;
 }
@@ -112,6 +117,7 @@ public:
 
 	virtual void waitOn(ConditionVariable& c = COND_TRUE, int timeout = -1 ) {
 		pthread_mutex_t *m = getCondMutex(c);
+		if(m == NULL ) return;
 
 		bool l = !getConditionMutex(c)->isLockedByCurrent();
 		if(l) c.lock();
@@ -146,7 +152,7 @@ public:
 
 				int policy;
 				sched_param p;
-				p.__sched_priority = 99;
+				p.sched_priority = 99;
 				int schedret = pthread_setschedparam(thread_, SCHED_RR, &p);
 
 					log(LEVEL_ERROR, strerror(schedret));
@@ -154,7 +160,7 @@ public:
 //				pthread_attr_getschedparam(&thread_attr_, &p);
 //				pthread_attr_getschedpolicy(&thread_attr_, &policy);
 				pthread_getschedparam(thread_, &policy, &p);
-				if(policy != SCHED_RR || p.__sched_priority != 99) {
+				if(policy != SCHED_RR || p.sched_priority != 99) {
 
 					log(LEVEL_WARNING, "Cannot set real time priority!");
 					retval = E_REALTIME;
@@ -174,7 +180,7 @@ public:
 		return pthread_cond_broadcast(&wait_cond_);
 	}
 
-	void* join(Thread& thread) {
+	void* join() {
 		void* ret;
 		pthread_join(thread_, &ret);
 		return ret;
@@ -194,7 +200,7 @@ public:
 //		}
 		realtime_ = true;
 		sched_param p;
-		p.__sched_priority = 99;
+		p.sched_priority = 99;
 		int ret = pthread_attr_setschedpolicy(&thread_attr_, SCHED_RR);
 		pthread_attr_setschedparam(&thread_attr_, &p);
 		return ret;
@@ -212,9 +218,10 @@ private:
 		RunArg *rarg = (RunArg*) arg;
 		rarg->thread->returnval_ = rarg->runnable->run();
 		void* ret = rarg->thread->returnval_;
+		rarg->thread->running_cond_.lock();
+		rarg->thread->running_cond_.running_ = false;
+		rarg->thread->running_cond_.unlock();
 		delete rarg;
-		//std::cout<< "proc end" << std::endl;
-		rarg->thread->running_ = false;
 		return ret;
 	}
 
@@ -253,8 +260,8 @@ Mutex * Thread::getMutex(int threads)  {
 
 
 
-ConditionVariable::ConditionVariable() {
-	mutex_ = new PthreadMutex();
+ConditionVariable::ConditionVariable(): mutex_(Thread::getMutex()) {
+
 	//locked_ = false;
 }
 

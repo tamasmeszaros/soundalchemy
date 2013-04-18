@@ -18,7 +18,13 @@
 					<folderInfo id="cdt.managedbuild.config.gnu.exe.debug.1150993157." name="/" resourcePath="">
 						<toolChain id="cdt.managedbuild.toolchain.gnu.exe.debug.1748777784" name="Linux GCC" superClass="cdt.managedbuild.toolchain.gnu.exe.debug">
 							<targetPlatform id="cdt.managedbuild.target.gnu.platform.exe.debug.1876287083" name="Debug Platform" superClass="cdt.managedbuild.target.gnu.platform.exe.debug"/>
-							<builder buildPath="${workspace_loc:/soundalchemy/Debug}" id="cdt.managedbuild.target.gnu.builder.exe.debug.485448099" keepEnvironmentInBuildfile="false" managedBuildOn="true" name="Gnu Make Builder" superClass="cdt.managedbuild.target.gnu.builder.exe.debug"/>
+							<builder buildPath="${workspace_loc:/soundalchemy/Debug}" id="cdt.managedbuild.target.gnu.builder.exe.debug.485448099" keepEnvironmentInBuildfile="false" managedBuildOn="true" name="Gnu Make Builder" superClass="cdt.managedbuild.target.gnu.builder.exe.debug">
+								<outputEntries>
+									<entry flags="VALUE_WORKSPACE_PATH|RESOLVED" kind="outputPath" name="Debug"/>
+									<entry flags="VALUE_WORKSPACE_PATH|RESOLVED" kind="outputPath" name="Release"/>
+									<entry flags="VALUE_WORKSPACE_PATH|RESOLVED" kind="outputPath" name="Android"/>
+								</outputEntries>
+							</builder>
 							<tool id="cdt.managedbuild.tool.gnu.archiver.base.1366476830" name="GCC Archiver" superClass="cdt.managedbuild.tool.gnu.archiver.base"/>
 							<tool id="cdt.managedbuild.tool.gnu.cpp.compiler.exe.debug.87896667" name="GCC C++ Compiler" superClass="cdt.managedbuild.tool.gnu.cpp.compiler.exe.debug">
 								<option id="gnu.cpp.compiler.exe.debug.option.optimization.level.364800561" name="Optimization Level" superClass="gnu.cpp.compiler.exe.debug.option.optimization.level" value="gnu.cpp.compiler.optimization.level.none" valueType="enumerated"/>
@@ -26,6 +32,7 @@
 								<option id="gnu.cpp.compiler.option.include.paths.1631697978" name="Include paths (-I)" superClass="gnu.cpp.compiler.option.include.paths" valueType="includePath">
 									<listOptionValue builtIn="false" value="&quot;${workspace_loc:/soundalchemy/external/include}&quot;"/>
 								</option>
+								<option id="gnu.cpp.compiler.option.other.other.1484798118" name="Other flags" superClass="gnu.cpp.compiler.option.other.other" value="-c -fmessage-length=0 -ffast-math" valueType="string"/>
 								<inputType id="cdt.managedbuild.tool.gnu.cpp.compiler.input.212857746" superClass="cdt.managedbuild.tool.gnu.cpp.compiler.input"/>
 							</tool>
 							<tool id="cdt.managedbuild.tool.gnu.c.compiler.exe.debug.565181877" name="GCC C Compiler" superClass="cdt.managedbuild.tool.gnu.c.compiler.exe.debug">
@@ -34,12 +41,15 @@
 								<option id="gnu.c.compiler.option.include.paths.974211767" name="Include paths (-I)" superClass="gnu.c.compiler.option.include.paths" valueType="includePath">
 									<listOptionValue builtIn="false" value="&quot;${workspace_loc:/soundalchemy/external/include}&quot;"/>
 								</option>
+								<option id="gnu.c.compiler.option.misc.other.1456514386" name="Other flags" superClass="gnu.c.compiler.option.misc.other" value="-c -fmessage-length=0 -ffast-math" valueType="string"/>
 								<inputType id="cdt.managedbuild.tool.gnu.c.compiler.input.738825312" superClass="cdt.managedbuild.tool.gnu.c.compiler.input"/>
 							</tool>
 							<tool id="cdt.managedbuild.tool.gnu.c.linker.exe.debug.1782125771" name="GCC C Linker" superClass="cdt.managedbuild.tool.gnu.c.linker.exe.debug"/>
 							<tool id="cdt.managedbuild.tool.gnu.cpp.linker.exe.debug.959592308" name="GCC C++ Linker" superClass="cdt.managedbuild.tool.gnu.cpp.linker.exe.debug">
 								<option id="gnu.cpp.link.option.libs.317955255" name="Libraries (-l)" superClass="gnu.cpp.link.option.libs" valueType="libs">
 									<listOptionValue builtIn="false" value="pthread"/>
+									<listOptionValue builtIn="false" value="m"/>
+									<listOptionValue builtIn="false" value="dl"/>
 									<listOptionValue builtIn="false" value="jsoncpp"/>
 									<listOptionValue builtIn="false" value="asound"/>
 								</option>
@@ -52,12 +62,13 @@
 								</inputType>
 							</tool>
 							<tool id="cdt.managedbuild.tool.gnu.assembler.exe.debug.1522694474" name="GCC Assembler" superClass="cdt.managedbuild.tool.gnu.assembler.exe.debug">
+								<option id="gnu.both.asm.option.include.paths.458459127" name="Include paths (-I)" superClass="gnu.both.asm.option.include.paths"/>
 								<inputType id="cdt.managedbuild.tool.gnu.assembler.input.1094930659" superClass="cdt.managedbuild.tool.gnu.assembler.input"/>
 							</tool>
 						</toolChain>
 					</folderInfo>
 					<sourceEntries>
-						<entry excluding="src/lib/salsa-lib|external|src/llaudio/drivers/tinyalsa|src/jni_main.cpp|src/lib/jsoncpp|jni" flags="VALUE_WORKSPACE_PATH|RESOLVED" kind="sourcePath" name=""/>
+						<entry excluding="external/include|external/lib|external/share|src/lib/salsa-lib|code|src/llaudio/drivers/tinyalsa|src/jni_main.cpp|src/lib/jsoncpp|jni" flags="VALUE_WORKSPACE_PATH|RESOLVED" kind="sourcePath" name=""/>
 					</sourceEntries>
 				</configuration>
 			</storageModule>
@@ -85,16 +96,33 @@
 							<tool id="cdt.managedbuild.tool.gnu.cpp.compiler.exe.release.883804914" name="GCC C++ Compiler" superClass="cdt.managedbuild.tool.gnu.cpp.compiler.exe.release">
 								<option id="gnu.cpp.compiler.exe.release.option.optimization.level.408958016" name="Optimization Level" superClass="gnu.cpp.compiler.exe.release.option.optimization.level" value="gnu.cpp.compiler.optimization.level.most" valueType="enumerated"/>
 								<option id="gnu.cpp.compiler.exe.release.option.debugging.level.1728005397" name="Debug Level" superClass="gnu.cpp.compiler.exe.release.option.debugging.level" value="gnu.cpp.compiler.debugging.level.none" valueType="enumerated"/>
+								<option id="gnu.cpp.compiler.option.other.other.708730523" name="Other flags" superClass="gnu.cpp.compiler.option.other.other" value="-c -fmessage-length=0 -ffast-math" valueType="string"/>
+								<option id="gnu.cpp.compiler.option.include.paths.609901248" name="Include paths (-I)" superClass="gnu.cpp.compiler.option.include.paths" valueType="includePath">
+									<listOptionValue builtIn="false" value="&quot;${workspace_loc:/soundalchemy/external/include}&quot;"/>
+								</option>
 								<inputType id="cdt.managedbuild.tool.gnu.cpp.compiler.input.1541626692" superClass="cdt.managedbuild.tool.gnu.cpp.compiler.input"/>
 							</tool>
 							<tool id="cdt.managedbuild.tool.gnu.c.compiler.exe.release.262289075" name="GCC C Compiler" superClass="cdt.managedbuild.tool.gnu.c.compiler.exe.release">
 								<option defaultValue="gnu.c.optimization.level.most" id="gnu.c.compiler.exe.release.option.optimization.level.861961966" name="Optimization Level" superClass="gnu.c.compiler.exe.release.option.optimization.level" valueType="enumerated"/>
 								<option id="gnu.c.compiler.exe.release.option.debugging.level.102025896" name="Debug Level" superClass="gnu.c.compiler.exe.release.option.debugging.level" value="gnu.c.debugging.level.none" valueType="enumerated"/>
+								<option id="gnu.c.compiler.option.misc.other.359917257" name="Other flags" superClass="gnu.c.compiler.option.misc.other" value="-c -fmessage-length=0 -ffast-math" valueType="string"/>
+								<option id="gnu.c.compiler.option.include.paths.1280740445" name="Include paths (-I)" superClass="gnu.c.compiler.option.include.paths" valueType="includePath">
+									<listOptionValue builtIn="false" value="&quot;${workspace_loc:/soundalchemy/external/include}&quot;"/>
+								</option>
 								<inputType id="cdt.managedbuild.tool.gnu.c.compiler.input.314050606" superClass="cdt.managedbuild.tool.gnu.c.compiler.input"/>
 							</tool>
 							<tool id="cdt.managedbuild.tool.gnu.c.linker.exe.release.1708297999" name="GCC C Linker" superClass="cdt.managedbuild.tool.gnu.c.linker.exe.release"/>
 							<tool id="cdt.managedbuild.tool.gnu.cpp.linker.exe.release.63255700" name="GCC C++ Linker" superClass="cdt.managedbuild.tool.gnu.cpp.linker.exe.release">
-								<option id="gnu.cpp.link.option.paths.1087430889" name="Library search path (-L)" superClass="gnu.cpp.link.option.paths" valueType="libPaths"/>
+								<option id="gnu.cpp.link.option.paths.1087430889" name="Library search path (-L)" superClass="gnu.cpp.link.option.paths" valueType="libPaths">
+									<listOptionValue builtIn="false" value="&quot;${workspace_loc:/soundalchemy/external/lib/x86_linux}&quot;"/>
+								</option>
+								<option id="gnu.cpp.link.option.libs.766634425" name="Libraries (-l)" superClass="gnu.cpp.link.option.libs" valueType="libs">
+									<listOptionValue builtIn="false" value="m"/>
+									<listOptionValue builtIn="false" value="jsoncpp"/>
+									<listOptionValue builtIn="false" value="pthread"/>
+									<listOptionValue builtIn="false" value="asound"/>
+									<listOptionValue builtIn="false" value="dl"/>
+								</option>
 								<inputType id="cdt.managedbuild.tool.gnu.cpp.linker.input.239228003" superClass="cdt.managedbuild.tool.gnu.cpp.linker.input">
 									<additionalInput kind="additionalinputdependency" paths="$(USER_OBJS)"/>
 									<additionalInput kind="additionalinput" paths="$(LIBS)"/>
@@ -106,7 +134,7 @@
 						</toolChain>
 					</folderInfo>
 					<sourceEntries>
-						<entry excluding="src/lib/salsa-lib|external|src/llaudio/drivers/tinyalsa|src/jni_main.cpp|src/lib/jsoncpp|jni" flags="VALUE_WORKSPACE_PATH|RESOLVED" kind="sourcePath" name=""/>
+						<entry excluding="external/lib|external/share|external/include|code|src/lib/salsa-lib|src/llaudio/drivers/tinyalsa|src/jni_main.cpp|src/lib/jsoncpp|jni" flags="VALUE_WORKSPACE_PATH|RESOLVED" kind="sourcePath" name=""/>
 					</sourceEntries>
 				</configuration>
 			</storageModule>
@@ -141,10 +169,11 @@
 								<option id="gnu.c.compiler.option.include.paths.677621055" name="Include paths (-I)" superClass="gnu.c.compiler.option.include.paths" valueType="includePath">
 									<listOptionValue builtIn="false" value="&quot;${workspace_loc:/soundalchemy/external/include}&quot;"/>
 								</option>
+								<option id="gnu.c.compiler.option.optimization.flags.474619434" name="Other optimization flags" superClass="gnu.c.compiler.option.optimization.flags" value="" valueType="string"/>
 								<inputType id="cdt.managedbuild.tool.gnu.c.compiler.input.1806218457" superClass="cdt.managedbuild.tool.gnu.c.compiler.input"/>
 							</tool>
 							<tool command="g++" commandLinePattern="${COMMAND} ${FLAGS} ${OUTPUT_FLAG} ${OUTPUT_PREFIX}${OUTPUT} ${INPUTS}" errorParsers="org.eclipse.cdt.core.GCCErrorParser" id="cdt.managedbuild.tool.gnu.cross.cpp.compiler.509230281" name="Cross G++ Compiler" superClass="cdt.managedbuild.tool.gnu.cross.cpp.compiler">
-								<option id="gnu.cpp.compiler.option.optimization.level.1312064660" name="Optimization Level" superClass="gnu.cpp.compiler.option.optimization.level" value="gnu.cpp.compiler.optimization.level.most" valueType="enumerated"/>
+								<option id="gnu.cpp.compiler.option.optimization.level.1312064660" name="Optimization Level" superClass="gnu.cpp.compiler.option.optimization.level" value="gnu.cpp.compiler.optimization.level.optimize" valueType="enumerated"/>
 								<option id="gnu.cpp.compiler.option.debugging.level.1742335139" name="Debug Level" superClass="gnu.cpp.compiler.option.debugging.level" value="gnu.cpp.compiler.debugging.level.none" valueType="enumerated"/>
 								<option id="gnu.cpp.compiler.option.preprocessor.def.171638502" name="Defined symbols (-D)" superClass="gnu.cpp.compiler.option.preprocessor.def" valueType="definedSymbols">
 									<listOptionValue builtIn="false" value="ANDROID"/>
@@ -152,6 +181,8 @@
 								<option id="gnu.cpp.compiler.option.include.paths.1339909803" name="Include paths (-I)" superClass="gnu.cpp.compiler.option.include.paths" valueType="includePath">
 									<listOptionValue builtIn="false" value="&quot;${workspace_loc:/soundalchemy/external/include}&quot;"/>
 								</option>
+								<option id="gnu.cpp.compiler.option.other.other.867455119" name="Other flags" superClass="gnu.cpp.compiler.option.other.other" value="-c -fmessage-length=0 " valueType="string"/>
+								<option id="gnu.cpp.compiler.option.optimization.flags.1695552107" name="Other optimization flags" superClass="gnu.cpp.compiler.option.optimization.flags" value="" valueType="string"/>
 								<inputType id="cdt.managedbuild.tool.gnu.cpp.compiler.input.1156667599" superClass="cdt.managedbuild.tool.gnu.cpp.compiler.input"/>
 							</tool>
 							<tool id="cdt.managedbuild.tool.gnu.cross.c.linker.2025598227" name="Cross GCC Linker" superClass="cdt.managedbuild.tool.gnu.cross.c.linker"/>
@@ -161,9 +192,11 @@
 								</option>
 								<option id="gnu.cpp.link.option.libs.89000885" name="Libraries (-l)" superClass="gnu.cpp.link.option.libs" valueType="libs">
 									<listOptionValue builtIn="false" value="salsa"/>
+									<listOptionValue builtIn="false" value="dl"/>
 									<listOptionValue builtIn="false" value="log"/>
 									<listOptionValue builtIn="false" value="jsoncpp"/>
 								</option>
+								<option id="gnu.cpp.link.option.other.1959521539" name="Other options (-Xlinker [option])" superClass="gnu.cpp.link.option.other"/>
 								<inputType id="cdt.managedbuild.tool.gnu.cpp.linker.input.28755247" superClass="cdt.managedbuild.tool.gnu.cpp.linker.input">
 									<additionalInput kind="additionalinputdependency" paths="$(USER_OBJS)"/>
 									<additionalInput kind="additionalinput" paths="$(LIBS)"/>
@@ -176,7 +209,7 @@
 						</toolChain>
 					</folderInfo>
 					<sourceEntries>
-						<entry excluding="external|src/llaudio/drivers/tinyalsa|src/jni_main.cpp" flags="VALUE_WORKSPACE_PATH|RESOLVED" kind="sourcePath" name=""/>
+						<entry excluding="external/include|external/share|external/lib|code|src/llaudio/drivers/tinyalsa|src/jni_main.cpp" flags="VALUE_WORKSPACE_PATH|RESOLVED" kind="sourcePath" name=""/>
 					</sourceEntries>
 				</configuration>
 			</storageModule>
@@ -192,8 +225,8 @@
 	<storageModule moduleId="org.eclipse.cdt.internal.ui.text.commentOwnerProjectMappings"/>
 	<storageModule moduleId="scannerConfiguration">
 		<autodiscovery enabled="true" problemReportingEnabled="true" selectedProfileId=""/>
-		<scannerConfigBuildInfo instanceId="cdt.managedbuild.config.gnu.exe.release.1867408175;cdt.managedbuild.config.gnu.exe.release.1867408175.;com.android.gcc.compiler.899777269;com.android.gcc.inputType.1963412440">
-			<autodiscovery enabled="true" problemReportingEnabled="true" selectedProfileId="com.android.AndroidPerProjectProfile"/>
+		<scannerConfigBuildInfo instanceId="cdt.managedbuild.config.gnu.exe.release.1867408175;cdt.managedbuild.config.gnu.exe.release.1867408175.1718528530;cdt.managedbuild.tool.gnu.cross.c.compiler.1705178819;cdt.managedbuild.tool.gnu.c.compiler.input.1664322969">
+			<autodiscovery enabled="true" problemReportingEnabled="true" selectedProfileId="org.eclipse.cdt.managedbuilder.core.GCCManagedMakePerProjectProfileC"/>
 		</scannerConfigBuildInfo>
 		<scannerConfigBuildInfo instanceId="cdt.managedbuild.config.gnu.exe.release.1867408175;cdt.managedbuild.config.gnu.exe.release.1867408175.;cdt.managedbuild.tool.gnu.cross.cpp.compiler.509230281;cdt.managedbuild.tool.gnu.cpp.compiler.input.1156667599">
 			<autodiscovery enabled="true" problemReportingEnabled="true" selectedProfileId="org.eclipse.cdt.managedbuilder.core.GCCManagedMakePerProjectProfileCPP"/>
@@ -208,17 +241,35 @@
 				</scannerInfoProvider>
 			</profile>
 		</scannerConfigBuildInfo>
+		<scannerConfigBuildInfo instanceId="cdt.managedbuild.config.gnu.exe.debug.1150993157;cdt.managedbuild.config.gnu.exe.debug.1150993157.;cdt.managedbuild.tool.gnu.cpp.compiler.exe.debug.87896667;cdt.managedbuild.tool.gnu.cpp.compiler.input.212857746">
+			<autodiscovery enabled="true" problemReportingEnabled="true" selectedProfileId="org.eclipse.cdt.managedbuilder.core.GCCManagedMakePerProjectProfileCPP"/>
+		</scannerConfigBuildInfo>
+		<scannerConfigBuildInfo instanceId="cdt.managedbuild.config.gnu.exe.release.1867408175;cdt.managedbuild.config.gnu.exe.release.1867408175.1718528530;cdt.managedbuild.tool.gnu.cross.cpp.compiler.1271566551;cdt.managedbuild.tool.gnu.cpp.compiler.input.725156794">
+			<autodiscovery enabled="true" problemReportingEnabled="true" selectedProfileId="org.eclipse.cdt.managedbuilder.core.GCCManagedMakePerProjectProfileCPP"/>
+		</scannerConfigBuildInfo>
+		<scannerConfigBuildInfo instanceId="cdt.managedbuild.config.gnu.exe.release.1185661820;cdt.managedbuild.config.gnu.exe.release.1185661820.996423832;cdt.managedbuild.tool.gnu.cpp.compiler.exe.release.192688724;cdt.managedbuild.tool.gnu.cpp.compiler.input.1741667699">
+			<autodiscovery enabled="true" problemReportingEnabled="true" selectedProfileId="org.eclipse.cdt.managedbuilder.core.GCCManagedMakePerProjectProfileCPP"/>
+		</scannerConfigBuildInfo>
+		<scannerConfigBuildInfo instanceId="cdt.managedbuild.config.gnu.exe.debug.1150993157;cdt.managedbuild.config.gnu.exe.debug.1150993157.321271720;cdt.managedbuild.tool.gnu.c.compiler.exe.debug.1030756912;cdt.managedbuild.tool.gnu.c.compiler.input.158171439">
+			<autodiscovery enabled="true" problemReportingEnabled="true" selectedProfileId="org.eclipse.cdt.managedbuilder.core.GCCManagedMakePerProjectProfileC"/>
+		</scannerConfigBuildInfo>
+		<scannerConfigBuildInfo instanceId="cdt.managedbuild.config.gnu.exe.release.1867408175;cdt.managedbuild.config.gnu.exe.release.1867408175.;com.android.gcc.compiler.899777269;com.android.gcc.inputType.1963412440">
+			<autodiscovery enabled="true" problemReportingEnabled="true" selectedProfileId="com.android.AndroidPerProjectProfile"/>
+		</scannerConfigBuildInfo>
 		<scannerConfigBuildInfo instanceId="cdt.managedbuild.config.gnu.exe.release.1185661820;cdt.managedbuild.config.gnu.exe.release.1185661820.;cdt.managedbuild.tool.gnu.c.compiler.exe.release.262289075;cdt.managedbuild.tool.gnu.c.compiler.input.314050606">
 			<autodiscovery enabled="true" problemReportingEnabled="true" selectedProfileId="org.eclipse.cdt.managedbuilder.core.GCCManagedMakePerProjectProfileC"/>
 		</scannerConfigBuildInfo>
 		<scannerConfigBuildInfo instanceId="cdt.managedbuild.config.gnu.exe.debug.1150993157;cdt.managedbuild.config.gnu.exe.debug.1150993157.;cdt.managedbuild.tool.gnu.c.compiler.exe.debug.565181877;cdt.managedbuild.tool.gnu.c.compiler.input.738825312">
 			<autodiscovery enabled="true" problemReportingEnabled="true" selectedProfileId="org.eclipse.cdt.managedbuilder.core.GCCManagedMakePerProjectProfileC"/>
 		</scannerConfigBuildInfo>
+		<scannerConfigBuildInfo instanceId="cdt.managedbuild.config.gnu.exe.debug.1150993157;cdt.managedbuild.config.gnu.exe.debug.1150993157.321271720;cdt.managedbuild.tool.gnu.cpp.compiler.exe.debug.1421017927;cdt.managedbuild.tool.gnu.cpp.compiler.input.1063235749">
+			<autodiscovery enabled="true" problemReportingEnabled="true" selectedProfileId="org.eclipse.cdt.managedbuilder.core.GCCManagedMakePerProjectProfileCPP"/>
+		</scannerConfigBuildInfo>
 		<scannerConfigBuildInfo instanceId="cdt.managedbuild.config.gnu.exe.release.1185661820;cdt.managedbuild.config.gnu.exe.release.1185661820.;cdt.managedbuild.tool.gnu.cpp.compiler.exe.release.883804914;cdt.managedbuild.tool.gnu.cpp.compiler.input.1541626692">
 			<autodiscovery enabled="true" problemReportingEnabled="true" selectedProfileId="org.eclipse.cdt.managedbuilder.core.GCCManagedMakePerProjectProfileCPP"/>
 		</scannerConfigBuildInfo>
-		<scannerConfigBuildInfo instanceId="cdt.managedbuild.config.gnu.exe.debug.1150993157;cdt.managedbuild.config.gnu.exe.debug.1150993157.;cdt.managedbuild.tool.gnu.cpp.compiler.exe.debug.87896667;cdt.managedbuild.tool.gnu.cpp.compiler.input.212857746">
-			<autodiscovery enabled="true" problemReportingEnabled="true" selectedProfileId="org.eclipse.cdt.managedbuilder.core.GCCManagedMakePerProjectProfileCPP"/>
+		<scannerConfigBuildInfo instanceId="cdt.managedbuild.config.gnu.exe.release.1185661820;cdt.managedbuild.config.gnu.exe.release.1185661820.996423832;cdt.managedbuild.tool.gnu.c.compiler.exe.release.568406036;cdt.managedbuild.tool.gnu.c.compiler.input.2023261738">
+			<autodiscovery enabled="true" problemReportingEnabled="true" selectedProfileId="org.eclipse.cdt.managedbuilder.core.GCCManagedMakePerProjectProfileC"/>
 		</scannerConfigBuildInfo>
 		<scannerConfigBuildInfo instanceId="cdt.managedbuild.config.gnu.exe.release.1867408175;cdt.managedbuild.config.gnu.exe.release.1867408175.;cdt.managedbuild.tool.gnu.cross.c.compiler.584850367;cdt.managedbuild.tool.gnu.c.compiler.input.1806218457">
 			<autodiscovery enabled="true" problemReportingEnabled="true" selectedProfileId="org.eclipse.cdt.managedbuilder.core.GCCManagedMakePerProjectProfileC"/>

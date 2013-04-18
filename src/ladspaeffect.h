@@ -9,7 +9,11 @@
 #define LADSPAEFFECT_H_
 
 #include "soundeffect.h"
-#include "ladspa.h"
+#ifdef ANDROID
+#include <ladspa/ladspa.h>
+#else
+#include <ladspa.h>
+#endif
 #include <list>
 
 namespace soundalchemy {
@@ -17,12 +21,12 @@ namespace soundalchemy {
 class LADSPAEffect: public soundalchemy::SoundEffect {
 
 	class LADSPAParam: public Param {
-		LADSPA_PortRangeHint& range_hint_;
+		const LADSPA_PortRangeHint& range_hint_;
 
 	public:
-		LADSPAParam(std::string name, LADSPA_PortRangeHint& range_hint):
+		LADSPAParam(std::string name, const LADSPA_PortRangeHint& range_hint):
 			Param(name),
-			range_hint_(range_hint_) {}
+			range_hint_(range_hint) {}
 
 		virtual TParamValue getValue() { return (TParamValue) value_; }
 
@@ -30,11 +34,32 @@ class LADSPAEffect: public soundalchemy::SoundEffect {
 			value_ = (LADSPA_Data) value;
 		}
 
+		virtual TParamValue getDefault(void);
+
+		virtual TParamValue getMin(void) { return range_hint_.LowerBound; }
+		virtual TParamValue getMax(void) { return range_hint_.UpperBound; }
+		virtual bool isLogarithmic() {
+			return LADSPA_IS_HINT_LOGARITHMIC(range_hint_.HintDescriptor);
+		}
+
+		virtual TParamType getType() {
+			TParamType type = PARAM_CONTINOUS;
+
+			if( LADSPA_IS_HINT_INTEGER(range_hint_.HintDescriptor) )
+				type = PARAM_INTEGER;
+			else if( LADSPA_IS_HINT_TOGGLED(range_hint_.HintDescriptor) )
+				type = PARAM_TOGGLE;
+			else if( LADSPA_IS_HINT_SAMPLE_RATE(range_hint_.HintDescriptor))
+				type = PARAM_SAMPLE_RATE;
+
+			return type;
+		}
+
 		LADSPA_Data value_;
 	};
 
 	class LADSPAPort: public Port {
-		LADSPA_PortRangeHint& range_hint_;
+		const LADSPA_PortRangeHint& range_hint_;
 		LADSPA_Data *buffer_;
 		LADSPA_Handle plugin_handle_;
 		const LADSPA_Descriptor& plugin_descriptor_;
@@ -42,7 +67,7 @@ class LADSPAEffect: public soundalchemy::SoundEffect {
 
 	public:
 		LADSPAPort(TPortDirection dir, std::string name,
-				LADSPA_PortRangeHint& range_hint,
+				const LADSPA_PortRangeHint& range_hint,
 				LADSPA_Handle plugin_handle,
 				const LADSPA_Descriptor& plugin_descriptor_, unsigned int index):
 			Port(dir, name),

@@ -21,39 +21,41 @@ using namespace std;
 
 int main(int argc, const char * argv[] )
 {
-//	llaErrorHandler eh;
-//	eh.enableLogging(true, true);
-//	eh.useExceptions(true);
-//
-//	try {
-//		llaDeviceManager* llalib = llaDeviceManager::getInstance(&eh);
-//		for(llaDeviceIterator i = llalib->getDeviceIterator(); !i.end(); i++) {
-//			cout << i->getName() << ": " << i->getName(true) << endl;
-//			for(llaDevice::IStreamIterator j = i->getInputStreamIterator(); !j.end(); j++) {
-//				cout <<"\t"<< j->getName() << " Capture" << endl;
-//
-//			}
-//
-//			for(llaDevice::OStreamIterator j = i->getOutputStreamIterator(); !j.end(); j++) {
-//				cout <<"\t"<< j->getName() << " Playback" <<endl;
-//
-//			}
-//		}
-//
-//		//llaFileStream *input = llalib->getFileStream("/home/quarky/Downloads/runaway.wav");
-//		llaInputStream *input = llalib->getDevice("Intel")->getInputStream();
-//		input->setChannelCount(CH_STEREO);
-//
-//		llaOutputStream * output = llalib->getDevice("Intel")->getOutputStream();
-//
-//		llaAudioBuffer buffer(32);
-//
-//		buffer.connectStreams(input, output);
-//
-//		delete llalib;
-//	} catch (llaErrorHandler::Exception& err) {
-//		cerr << err.what();
-//	}
+#ifdef DEBUG_LLAUDIO
+	llaErrorHandler eh;
+	eh.enableLogging(true, true);
+	eh.useExceptions(true);
+
+	try {
+		llaDeviceManager& llalib = llaDeviceManager::getInstance(eh);
+		for(llaDeviceIterator i = llalib.getDeviceIterator(); !i.end(); i++) {
+			cout << i->getName() << ": " << i->getName(true) << endl;
+			for(llaDevice::IStreamIterator j = i->getInputStreamIterator(); !j.end(); j++) {
+				cout <<"\t"<< j->getName() << " Capture" << endl;
+
+			}
+
+			for(llaDevice::OStreamIterator j = i->getOutputStreamIterator(); !j.end(); j++) {
+				cout <<"\t"<< j->getName() << " Playback" <<endl;
+
+			}
+		}
+
+		//llaFileStream *input = llalib->getFileStream("/home/quarky/Downloads/runaway.wav");
+		llaInputStream& input = llalib.getDevice("RP250").getInputStream();
+		input.setChannelCount(CH_STEREO);
+
+		llaOutputStream& output = llalib.getDevice("RP250").getOutputStream();
+
+		llaAudioPipe audio_pipe;
+
+		audio_pipe.connectStreams(input, output);
+
+		llalib.destroy();
+	} catch (llaErrorHandler::Exception& err) {
+		cerr << err.what();
+	}
+#else
 
 	initLogs();
 	//enableDebug();
@@ -67,6 +69,7 @@ int main(int argc, const char * argv[] )
 	dspserver.startListening();
 
 	freeLogs();
+#endif
 
 	return 0;
 }

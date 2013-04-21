@@ -58,11 +58,11 @@ llaAudioPipe::Buffer::Buffer() {
 void llaudio::llaAudioPipe::setBufferLength(TSize frames) {
 	input_buffer_.framesRequested = frames;
 	output_buffer_.framesRequested = frames;
+	frames_count_ = frames;
 }
 
 llaudio::llaAudioPipe::~llaAudioPipe() {
-	input_buffer_.clear();
-	output_buffer_.clear();
+	clearBuffers();
 }
 
 float** llaudio::llaAudioPipe::Buffer::getSamples( void ) {
@@ -236,6 +236,7 @@ void llaudio::llaAudioPipe::Buffer::clear(void) {
 			delete [] rawfp_non_i_[i];
 		}
 		delete [] rawfp_non_i_;
+		rawfp_non_i_ = NULL;
 	}
 
 	fail_state_ = false;
@@ -245,9 +246,9 @@ void llaudio::llaAudioPipe::Buffer::clear(void) {
 }
 
 void llaAudioPipe::Buffer::alloc(void) {
-	if( fail_state_ ) return;
 
 	clear();
+	if( fail_state_ ) return;
 
 	if(organizationRequested == INTERLEAVED) {
 		iraw_ = new char[framesRequested*channelsRequested*formatRequested.sample_width/8];
@@ -256,11 +257,6 @@ void llaAudioPipe::Buffer::alloc(void) {
 		for(int i = 0; i < channelsRequested; i++) {
 			niraw_[i] = new char[framesRequested*formatRequested.sample_width/8];
 		}
-	}
-
-	rawfp_non_i_ = new float*[channelsRequested];
-	for(TSize i = 0; i < channelsRequested; i++) {
-		rawfp_non_i_[i] = new float[framesRequested*channelsRequested];
 	}
 
 	rawfp_non_i_ = new float*[channelsRequested];

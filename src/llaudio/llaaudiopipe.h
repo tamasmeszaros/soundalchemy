@@ -281,6 +281,8 @@ public:
 
 protected:
 
+	void clearBuffers(void) { 	input_buffer_.clear(); output_buffer_.clear(); }
+
 	// if set, the buffer is unusable until a call is made for clear()
 	bool fail_state_;
 	TSize lastwrite_;

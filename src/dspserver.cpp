@@ -239,6 +239,7 @@ TAlchemyError DspServer::setOutputStream(TDeviceId device, TStreamId id) {
 
 
 void DspServer::setBufferSize(TSize buffer_size) {
+	dsp_process_.setBufferSize(buffer_size);
 }
 
 void DspServer::setSampleRate(TSampleRate sample_rate) {
@@ -348,6 +349,7 @@ void DspServer::DspProcess::stopProcessing(void) {
 	state_.state_requested_ = ST_STOPPED;
 	unlock();
 	if(proc_thread_->isRunning()) proc_thread_->join();
+	//clearBuffers();
 }
 
 bool DspServer::DspProcess::stop(void) {
@@ -387,16 +389,15 @@ void DspServer::DspProcess::onSamplesReady(void) {
 #endif
 
 
-//	float** o_samples = getOutputBuffer().getSamples();
-//	float** i_samples = getInputBuffer().getSamples();
-//
-//	graph_.setInputBuffer(i_samples, getInputBuffer().getChannels());
-//	graph_.setOutputBuffer(o_samples, getOutputBuffer().getChannels());
-//
-//	graph_.traverse(this->lastwrite_);
-//
-//	//usleep(8000);
-//	getOutputBuffer().writeSamples();
+	float** o_samples = getOutputBuffer().getSamples();
+	float** i_samples = getInputBuffer().getSamples();
+
+	graph_.setInputBuffer(i_samples, getInputBuffer().getChannels());
+	graph_.setOutputBuffer(o_samples, getOutputBuffer().getChannels());
+
+	graph_.traverse(this->lastwrite_);
+
+	getOutputBuffer().writeSamples();
 
 	callback_counter_++;
 }
@@ -435,34 +436,31 @@ DspServer::EffectChain::Output::Output() : MixerEffect("output"),
 
 DspServer::EffectChain::EffectChain() :
 		input_(), output_(), mutex_(Thread::getMutex()),
-		sample_rate_(SR_CD_QUALITY_44100), bypassed_(true)
+		sample_rate_(SR_CD_QUALITY_44100), bypassed_(false)
 		 {
 
 
 	output_.setInputsCount(input_.getOutputsCount());
 
-//	SoundEffect *e[] = {
-//
-//			database_->getEffect("mono_phaser", sample_rate_),
-//			database_->getEffect("caps_amp", sample_rate_),
-//			database_->getEffect("caps_cabinet", sample_rate_),
-//			database_->getEffect("plate_reverb", sample_rate_),
-//
-//	};
-//
-//	e[1]->getParam("tonestack")->setValue(3.0f);
-//	e[1]->getParam("gain")->setValue(0.80f);
-//	e[1]->getParam("treble")->setValue(1.0f);
-//	e[1]->getParam("mid")->setValue(0.5f);
-//	e[2]->getParam("model")->setValue(1.0f);
-//////	e[0]->getParam("mode")->setValue(3);
-//////	e[0]->getParam("gain (dB)")->setValue(-24.0f);
-//////	e[0]->getParam("bias")->setValue(0.0f);
-////////	addEffect(e[1],-1);
-//	addEffect(e[0],-1);
-//	addEffect(e[1],-1);
-//	addEffect(e[2],-1);
-//	addEffect(e[3],-1);
+	SoundEffect *e[] = {
+
+			database_->getEffect("mono_phaser", sample_rate_),
+			//database_->getEffect("caps_amp", sample_rate_),
+			//database_->getEffect("caps_cabinet", sample_rate_),
+			database_->getEffect("plate_reverb", sample_rate_),
+
+	};
+
+//	e[0]->getParam("tonestack")->setValue(7.0f);
+//	e[0]->getParam("gain")->setValue(0.60f);
+//	e[0]->getParam("treble")->setValue(1.0f);
+//	e[0]->getParam("mid")->setValue(0.5f);
+	//e[1]->getParam("model")->setValue(9.0f);
+
+	addEffect(e[0],-1);
+	addEffect(e[1],-1);
+	//addEffect(e[2],-1);
+	//addEffect(e[3],-1);
 }
 
 void DspServer::EffectChain::setSampleRate() {

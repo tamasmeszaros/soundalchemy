@@ -221,6 +221,7 @@ private:
 		rarg->thread->running_cond_.lock();
 		rarg->thread->running_cond_.running_ = false;
 		rarg->thread->running_cond_.unlock();
+		rarg->thread->wakeUpAll();
 		delete rarg;
 		return ret;
 	}

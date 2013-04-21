@@ -30,10 +30,7 @@ public:
 	static const snd_pcm_stream_t OUTPUT_STREAM;
 
 	enum playback_settings {
-		REAL_BUFFER_SIZE_MIN = 1024,
-		REAL_PERIOD_SIZE_MIN = 32,
-		REAL_PERIOD_SIZE_MAX = 256,
-		BUFFER_SIZE_MULTIPLIER = 2
+		REAL_BUFFER_SIZE_MIN = 2048
 	};
 
 

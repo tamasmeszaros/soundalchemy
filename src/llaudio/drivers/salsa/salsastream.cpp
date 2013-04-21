@@ -242,23 +242,12 @@ TErrors SalsaStream::read(llaAudioPipe& buffer) {
 	int rc;
 	getRawInputBuffers(buffer, &iraw, &niraw);
 
-//	snd_pcm_start(pcm_);
-//	if ((snderr = snd_pcm_wait (pcm_, -1)) < 0) {
-//			//LOGGER().warning(E_READ_STREAM, "Polling failed");
-//			//break;
-//			//c++;
-//			//if(c>5) break;
-//	}
-	//else LOGGER().debug("poll success\n");
-//	snd_pcm_uframes_t frames_to_deliver = snd_pcm_avail_update(pcm_);
-//	frames_to_deliver = frames_to_deliver > buffer_size_ ? buffer_size_ : frames_to_deliver;
-
 	if(organization_ == SND_PCM_ACCESS_RW_NONINTERLEAVED) {
-		rc = snd_pcm_readn(pcm_, (void**)niraw, buffer_size_);
+		rc = snd_pcm_readn(pcm_, (void**)niraw, buffer.getBufferLength());
 
 	}
 	else {
-		rc = snd_pcm_readi(pcm_, (void*)iraw, buffer_size_);
+		rc = snd_pcm_readi(pcm_, (void*)iraw, buffer.getBufferLength());
 	}
 
 	setBufferLastWrite(buffer, rc);
@@ -311,7 +300,7 @@ TErrors SalsaStream::updateSettings(llaAudioPipe& buffer) {
 
 	// the real buffer size is twice the size of the required latency in frames
 
-	snd_pcm_uframes_t sndframes = buffer.getBufferLength()*BUFFER_SIZE_MULTIPLIER;
+	snd_pcm_uframes_t sndframes = buffer.getBufferLength();
 	sndframes = sndframes < REAL_BUFFER_SIZE_MIN ? REAL_BUFFER_SIZE_MIN: sndframes ;
 	snd_pcm_access_t acc_required;
 
@@ -440,9 +429,12 @@ TErrors SalsaStream::updateSettings(llaAudioPipe& buffer) {
 			buffer_size_ = sndframes;
 		}
 
-		sndframes = buffer.getBufferLength()/2;
-		//sndframes = sndframes < REAL_PERIOD_SIZE_MIN? REAL_PERIOD_SIZE_MIN : sndframes;
-		//sndframes = sndframes > REAL_PERIOD_SIZE_MAX? REAL_PERIOD_SIZE_MAX : sndframes;
+		err = snd_pcm_hw_params_get_period_size_min(hw_config_, &sndframes, 0);
+		CHECK_SNDERROR(err, E_STREAM_CONFIG);
+//		char num[10];
+//		sprintf(num, "%ld", sndframes);
+//		LOGGER().log(num);
+
 		err = snd_pcm_hw_params_set_period_size_near(pcm_, hw_config_,
 				&sndframes, NULL);
 		CHECK_SNDERROR(err, E_STREAM_CONFIG);
@@ -453,12 +445,6 @@ TErrors SalsaStream::updateSettings(llaAudioPipe& buffer) {
 		else buffer.getOutputBuffer().alloc();
 
 		snd_pcm_hw_params(pcm_, hw_config_);
-		err = snd_pcm_hw_params_get_period_size(hw_config_, &period_size_, NULL);
-		CHECK_SNDERROR(err, E_STREAM_CONFIG);
-
-		char num[10];
-		sprintf(num, "%ld", period_size_);
-		LOGGER().log(num);
 
 		pcm_state_ = SETUP;
 		snd_pcm_prepare(pcm_);
@@ -498,7 +484,7 @@ TErrors SalsaStream::write(llaAudioPipe& buffer) {
 	char *iraw, **niraw;
 	int rc;
 
-	getRawInputBuffers(buffer, &iraw, &niraw);
+	getRawOutputBuffers(buffer, &iraw, &niraw);
 
 	TSize frames_to_deliver = getBufferLastWrite(buffer);
 	if( frames_to_deliver <= 0 || frames_to_deliver > buffer_size_)
@@ -517,7 +503,7 @@ TErrors SalsaStream::write(llaAudioPipe& buffer) {
 	  snd_pcm_prepare(pcm_);
 	} else if (rc < 0) {
 		LOGGER().warning(E_WRITE_STREAM, snd_strerror(rc));
-		//snd_pcm_recover(pcm_, rc, 0);
+		snd_pcm_recover(pcm_, rc, 0);
 		return E_WRITE_STREAM;
 	}
 
@@ -525,6 +511,9 @@ TErrors SalsaStream::write(llaAudioPipe& buffer) {
 }
 
 TErrors SalsaStream::connect( llaOutputStream* output, llaAudioPipe& buffer) {
+
+
+
 	TErrors ret = _open(SND_PCM_NONBLOCK);
 	// Update pcm settings
 	if( ret != E_OK || (ret = updateSettings(buffer)) != E_OK ) return ret;
@@ -534,30 +523,19 @@ TErrors SalsaStream::connect( llaOutputStream* output, llaAudioPipe& buffer) {
 		return ret;
 	}
 
-
 	int err = 0;
 
-	// set up the output device ////////////////////////////////////////////////
-
-//	 This is not a nice operation but the output stream has to be a SalsaStream
-//	 since at this point the engine is surely the salsa-lib library.
-//	SalsaStream *salsaoutput = (SalsaStream*) output;
-
-//	// open the output device
-//	if( (ret = salsaoutput->_open(SND_PCM_NONBLOCK)) != E_OK) return ret;
-//
-//	//Update settings
-//	if( ret != E_OK || (ret = salsaoutput->updateSettings(buffer)) != E_OK )
-//		return ret;
+	snd_pcm_uframes_t avail_min = 0;
+	if(buffer.getBufferLength() < period_size_) {
+		close();
+		output->close();
+		LOGGER().error(E_STREAM_CONFIG, "Buffer length must be higher");
+		return E_STREAM_CONFIG;
+	}
+	else if(buffer.getBufferLength() / period_size_ < 3 ) avail_min = period_size_;
+	else avail_min = ((buffer.getBufferLength()/period_size_)-2)*period_size_;
 
 
-//	// get the period size
-	snd_pcm_uframes_t avail_min = period_size_;
-	//avail_min = buffer.getBufferLength()/period_size_ < 4? period_size_: buffer.getBufferLength()/2  ;
-	//avail_min = avail_min < REAL_PERIOD_SIZE_MIN? REAL_PERIOD_SIZE_MIN : avail_min;
-			char num[20];
-					sprintf(num, "%ld", avail_min);
-					LOGGER().log(num);
 
 	// Set up the input stream for polling /////////////////////////////////////
 	// This is the same process as for the output.
@@ -566,14 +544,8 @@ TErrors SalsaStream::connect( llaOutputStream* output, llaAudioPipe& buffer) {
 	err = snd_pcm_sw_params_current(pcm_, sw_config_);
 	CHECK_SNDERROR(err, E_STREAM_CONFIG);
 
-	snd_pcm_hw_params_alloca(&hw_config_);
-	snd_pcm_hw_params_current(pcm_, hw_config_);
-
-//	err = snd_pcm_hw_params_get_period_size(hw_config_,  &period_size, NULL);
+//	err = snd_pcm_sw_params_set_start_threshold (pcm_, sw_config_, 0U );
 //	CHECK_SNDERROR(err, E_STREAM_CONFIG);
-
-	err = snd_pcm_sw_params_set_start_threshold (pcm_, sw_config_, 0U );
-	CHECK_SNDERROR(err, E_STREAM_CONFIG);
 
 	err = snd_pcm_sw_params_set_avail_min(pcm_, sw_config_, avail_min  );
 	CHECK_SNDERROR(err, E_STREAM_CONFIG);
@@ -583,37 +555,6 @@ TErrors SalsaStream::connect( llaOutputStream* output, llaAudioPipe& buffer) {
 
 	snd_pcm_prepare(pcm_);
 
-
-
-
-
-//	// set up for polling write
-//	err = snd_pcm_sw_params_malloc(&(salsaoutput->sw_config_));
-//	err = snd_pcm_sw_params_current(salsaoutput->pcm_, salsaoutput->sw_config_);
-//	CHECK_SNDERROR(err, E_STREAM_CONFIG);
-//
-//	snd_pcm_hw_params_alloca(&(salsaoutput->hw_config_));
-//	snd_pcm_hw_params_current(salsaoutput->pcm_, salsaoutput->hw_config_);
-////
-////	err = snd_pcm_hw_params_get_period_size(salsaoutput->hw_config_,
-////			&period_size, NULL);
-////	CHECK_SNDERROR(err, E_STREAM_CONFIG);
-//
-//
-//	err = snd_pcm_sw_params_set_start_threshold (salsaoutput->pcm_,
-//			salsaoutput->sw_config_, 0U );
-//	CHECK_SNDERROR(err, E_STREAM_CONFIG);
-//
-//	err = snd_pcm_sw_params_set_avail_min(salsaoutput->pcm_,
-//			salsaoutput->sw_config_, buffer.getBufferLength()*8/10 );
-//	CHECK_SNDERROR(err, E_STREAM_CONFIG);
-//
-//	err = snd_pcm_sw_params(salsaoutput->pcm_, salsaoutput->sw_config_);
-//	CHECK_SNDERROR(err, E_STREAM_CONFIG);
-//
-//	snd_pcm_prepare(salsaoutput->pcm_);
-
-
 	snd_pcm_uframes_t frames;
 
 	char *iraw, **niraw;
@@ -621,20 +562,28 @@ TErrors SalsaStream::connect( llaOutputStream* output, llaAudioPipe& buffer) {
 	while(!buffer.stop() && !buffer.fail()) {
 		snd_pcm_start(pcm_);
 		if ((err = snd_pcm_wait (pcm_, -1)) < 0) {
-				//LOGGER().warning(E_READ_STREAM, "Polling failed");
-				//break;
-				//c++;
-				//if(c>5) break;
+			if (err == -EPIPE) {
+			  /* EPIPE means xrun */
+			  snd_pcm_prepare(pcm_);
+			} else if (err < 0) {
+				LOGGER().error(E_READ_STREAM, snd_strerror(err));
+				snd_pcm_sw_params_free(sw_config_);
+				close();
+				output->close();
+				return E_READ_STREAM;
+			}
 		}
-		//else LOGGER().debug("poll success\n");
 
-		frames = snd_pcm_avail_update(pcm_);
-		//wr_frames = frames;
+		frames = snd_pcm_avail(pcm_);
+		if(frames < 0) {
+			LOGGER().error(E_READ_STREAM, snd_strerror(err));
+			snd_pcm_sw_params_free(sw_config_);
+			close();
+			output->close();
+			return E_READ_STREAM;
+		}
 
-//		char num[20];
-//				sprintf(num, "%ld", frames);
-//				LOGGER().log(num);
-		if(frames <=0 || frames > buffer.getBufferLength()) frames = buffer.getBufferLength();
+		if(frames > buffer.getBufferLength()) frames = buffer.getBufferLength();
 
 		int rc;
 		getRawInputBuffers( buffer, &iraw, &niraw);
@@ -646,10 +595,6 @@ TErrors SalsaStream::connect( llaOutputStream* output, llaAudioPipe& buffer) {
 		else {
 			rc = snd_pcm_readi(pcm_, (void*)iraw, frames);
 		}
-
-//		char num[20];
-//				sprintf(num, "%ld", wr_frames);
-//				LOGGER().log(num);
 
 		// save the number of frames read
 		TSize lastwrite = ((TSize)rc <= buffer.getBufferLength())?
@@ -663,7 +608,6 @@ TErrors SalsaStream::connect( llaOutputStream* output, llaAudioPipe& buffer) {
 		  snd_pcm_prepare(pcm_);
 		} else if (rc < 0) {
 			LOGGER().warning(E_READ_STREAM, snd_strerror(rc));
-			//snd_pcm_recover(pcm_, rc, 0);
 			snd_pcm_sw_params_free(sw_config_);
 			close();
 			output->close();
@@ -677,54 +621,9 @@ TErrors SalsaStream::connect( llaOutputStream* output, llaAudioPipe& buffer) {
 			output->close();
 		}
 
-		// calling the pipe's callback
-//		buffer.onSamplesReady();
-//		if(buffer.fail()) {
-//			snd_pcm_sw_params_free(sw_config_);
-//			snd_pcm_sw_params_free(salsaoutput->sw_config_);
-//			close();
-//			output->close();
-//			return E_BUFFER_DISMATCH;
-//		}
-//
-//		// write the frames to the output stream ///////////////////////////////
-//		snd_pcm_start(salsaoutput->pcm_);
-//		if ((err = snd_pcm_wait (salsaoutput->pcm_, -1)) < 0) {
-//				//LOGGER().warning(E_READ_STREAM, "Polling failed");
-//				//break;
-//				//c++;
-//				//if(c>5) break;
-//		}
-//
-//		wr_frames = snd_pcm_avail_update(salsaoutput->pcm_);
-//		frames = wr_frames > lastwrite? lastwrite : wr_frames;
-//		getRawOutputBuffers( buffer, &iraw, &niraw);
-//
-//		if(salsaoutput->organization_ == SND_PCM_ACCESS_RW_NONINTERLEAVED) {
-//			rc = snd_pcm_writen(salsaoutput->pcm_, (void**)niraw, frames);
-//		}
-//		else {
-//			rc = snd_pcm_writei(salsaoutput->pcm_, (void*)iraw, frames);
-//		}
-//
-//		// detect errors
-//		if (rc == -EPIPE) {
-//		  /* EPIPE means underrun */
-//		  snd_pcm_prepare(salsaoutput->pcm_);
-//		} else if (rc < 0) {
-//			LOGGER().warning(E_WRITE_STREAM, snd_strerror(rc));
-//			//snd_pcm_recover(pcm_, rc, 0);
-//			snd_pcm_sw_params_free(sw_config_);
-//			snd_pcm_sw_params_free(salsaoutput->sw_config_);
-//			close();
-//			output->close();
-//			return E_WRITE_STREAM;
-//		}
-
 	}
 
 	snd_pcm_sw_params_free(sw_config_);
-	//snd_pcm_sw_params_free(salsaoutput->sw_config_);
 	close();
 	output->close();
 

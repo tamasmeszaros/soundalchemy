@@ -256,6 +256,10 @@ private:
 		 */
 		TAlchemyError startProcessing(void);
 
+		void setBufferSize(unsigned int frames) {
+			llaAudioPipe::setBufferLength(frames);
+		}
+
 		/**
 		 * Stops the processing.
 		 */

@@ -230,6 +230,22 @@ public:
 	}
 };
 
+// MSG_SET_BUFFER_SIZE /////////////////////////////////////////////////////////
+//
+
+class MsgSetBufferSize: public InboundMessage {
+	unsigned int buffer_size_;
+public:
+	MsgSetBufferSize(unsigned int buffer_size): buffer_size_(buffer_size) {}
+
+	OutboundMessage* instruct(DspServer& server) {
+		server.setBufferSize(buffer_size_);
+		OutboundMessage *reply = OutboundMessage::AckSetBufferSize();
+		reply->setChannelId(getChannelId());
+		return reply;
+	}
+};
+
 //
 // End of Message definitions //////////////////////////////////////////////////
 
@@ -306,6 +322,12 @@ InboundMessage* soundalchemy::InboundMessage::unserialize(TProtocol protocol,
 			msg = new MsgGetStream(dir);
 		}
 		break;
+	case MSG_SET_BUFFER_SIZE:
+		{
+			unsigned int frames = (unsigned int) jsondoc["buffer_size"].asUInt();
+			msg = new MsgSetBufferSize(frames);
+		}
+		break;
 	case MSG_EXIT:
 		msg = new MsgExit( );
 		break;
@@ -375,6 +397,10 @@ OutboundMessage* OutboundMessage::AckGetState(TProcessingState state) {
 
 OutboundMessage* OutboundMessage::AckClientOut( void ) {
 	return new OutboundMessage(MSG_CLIENT_OUT);
+}
+
+OutboundMessage* OutboundMessage::AckSetBufferSize( void ) {
+	return new OutboundMessage(MSG_SET_BUFFER_SIZE);
 }
 
 }

@@ -1,0 +1,72 @@
+{
+	"amp_models": [
+		{ 	
+			"name": 			"C* Guitar Amp",
+		  	"short_name": 		"caps_amp",
+			"description": 		"Guitar amplifier simulator with different amp models (tonestack) form the CAPS package",
+			"plugin_type": 		"LADSPA",
+			"plugin_file":		"caps.so",
+			"plugin_program": 	"AmpVTS",
+			"options": 			{
+									"param": "tonestack",
+									"values": ["basswoman", "twin", "wookie", "DC 30", "juice 800", "stanford", "HK 20", "nihon ace", "porky"]
+								}
+								
+		}
+	],
+
+	"cabinet_models": [
+		{
+			"name": 			"C* Cabinet",
+			"short_name":		"caps_cabinet",
+			"description":		"Guitar cabinet model from the CAPS package",
+			"plugin_type":		"LADSPA",
+			"plugin_file":		"caps.so",
+			"plugin_program":	"CabinetIV"
+		}
+	],
+	
+	"distortions": [
+		{
+			"name": 			"CAPS distortion",
+			"short_name":		"caps_distortion",
+			"description":		"Saturate distortion model from the CAPS package",
+			"plugin_type":		"LADSPA",
+			"plugin_file":		"caps.so",
+			"plugin_program":	"Saturate"
+		}
+	],
+	
+	"ambient_processors": [
+		{
+			"name": 			"Plate Reverb",
+			"short_name":		"plate_reverb",
+			"description":		"Excellent plate reverb simulation from the CAPS package",
+			"plugin_type":		"LADSPA",
+			"plugin_file":		"caps.so",
+			"plugin_program":	"Plate"
+		},
+		{
+			"name":				"Scape Delay",
+			"short_name":		"scape_delay",
+			"description":		"A versatile delay from the CAPS package",
+			"plugin_type":		"LADSPA",
+			"plugin_file":		"caps.so",
+			"plugin_program":	"Scape"
+		}
+	],
+
+	"modulations": [
+	   {
+	       "name":             "Mono Phaser",
+	       "short_name":       "mono_phaser",
+	       "description":      "Mono phaser from the CAPS package",
+	       "plugin_type":      "LADSPA",
+           "plugin_file":      "caps.so",
+           "plugin_program":   "PhaserII"
+	   }
+	],
+
+	"other_effects": [
+	]
+}

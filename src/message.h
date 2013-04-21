@@ -76,7 +76,8 @@ protected:
 		MSG_GET_EFFECT_PARAM,	//!< Get a parameter of a specific effect
 		MSG_GET_STATE,          //!< Obtain the processing state
 		MSG_SEND_CLIENT_ID,     //!< Sending a channel id to a new client
-		MSG_CLIENT_OUT
+		MSG_CLIENT_OUT,
+		MSG_SET_BUFFER_SIZE
 	} TMessageType;
 
 public:
@@ -143,6 +144,7 @@ public:
 	static OutboundMessage* AckSetStream( const char* error);
 	static OutboundMessage* AckGetState( TProcessingState state);
 	static OutboundMessage* AckClientOut( void );
+	static OutboundMessage* AckSetBufferSize( void );
 
 
 	virtual ~OutboundMessage() {}

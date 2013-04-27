@@ -444,23 +444,22 @@ DspServer::EffectChain::EffectChain() :
 
 	SoundEffect *e[] = {
 
-			database_->getEffect("mono_phaser", sample_rate_),
-			//database_->getEffect("caps_amp", sample_rate_),
-			//database_->getEffect("caps_cabinet", sample_rate_),
+			database_->getEffect("multi_chorus", sample_rate_),
+//			database_->getEffect("caps_amp", sample_rate_),
+//			database_->getEffect("caps_cabinet", sample_rate_),
 			database_->getEffect("plate_reverb", sample_rate_),
 
 	};
 
-//	e[0]->getParam("tonestack")->setValue(7.0f);
-//	e[0]->getParam("gain")->setValue(0.60f);
-//	e[0]->getParam("treble")->setValue(1.0f);
-//	e[0]->getParam("mid")->setValue(0.5f);
-	//e[1]->getParam("model")->setValue(9.0f);
+//	e[1]->getParam("tonestack")->setValue(7.0f);
+//	e[1]->getParam("gain")->setValue(0.60f);
+//	e[1]->getParam("treble")->setValue(1.0f);
+//	e[1]->getParam("mid")->setValue(0.5f);
+//	e[2]->getParam("model")->setValue(9.0f);
 
 	addEffect(e[0],-1);
 	addEffect(e[1],-1);
-	//addEffect(e[2],-1);
-	//addEffect(e[3],-1);
+
 }
 
 void DspServer::EffectChain::setSampleRate() {

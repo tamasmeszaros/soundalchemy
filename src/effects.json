@@ -12,7 +12,21 @@
 									"values": ["basswoman", "twin", "wookie", "DC 30", "juice 800", "stanford", "HK 20", "nihon ace", "porky"]
 								}
 								
+		},
+		{ 	
+			"name": 			"C* Guitar Amp models",
+		  	"short_name": 		"caps_tonestack",
+			"description": 		"Guitar amplifier simulator with different amp models (tonestack) form the CAPS package",
+			"plugin_type": 		"LADSPA",
+			"plugin_file":		"caps.so",
+			"plugin_program": 	"ToneStack",
+			"options": 			{
+									"param": "model",
+									"values": ["basswoman", "twin", "wookie", "DC 30", "juice 800", "stanford", "HK 20", "nihon ace", "porky"]
+								}
+								
 		}
+
 	],
 
 	"cabinet_models": [
@@ -34,6 +48,14 @@
 			"plugin_type":		"LADSPA",
 			"plugin_file":		"caps.so",
 			"plugin_program":	"Saturate"
+		},
+		{
+			"name": 			"CAPS mono compressor",
+			"short_name":		"caps_mono_compressor",
+			"description":		"Mono compressor from the CAPS package",
+			"plugin_type":		"LADSPA",
+			"plugin_file":		"caps.so",
+			"plugin_program":	"Compress"
 		}
 	],
 	
@@ -57,14 +79,31 @@
 	],
 
 	"modulations": [
-	   {
-	       "name":             "Mono Phaser",
-	       "short_name":       "mono_phaser",
-	       "description":      "Mono phaser from the CAPS package",
-	       "plugin_type":      "LADSPA",
-           "plugin_file":      "caps.so",
-           "plugin_program":   "PhaserII"
-	   }
+		{
+		   	"name":             "Mono Phaser",
+		   	"short_name":       "mono_phaser",
+		   	"description":      "Mono phaser from the CAPS package",
+		   	"plugin_type":      "LADSPA",
+		   	"plugin_file":      "caps.so",
+		   	"plugin_program":   "PhaserII"
+		},
+		{
+			"name":				"Chorus",
+			"short_name":		"mono_chorus",
+			"description":      "Mono chorus/flanger from the CAPS package",
+		   	"plugin_type":      "LADSPA",
+		   	"plugin_file":      "caps.so",
+		   	"plugin_program":   "ChorusI"
+		},
+		{
+			"name":				"Multi Chorus",
+			"short_name":		"multi_chorus",
+			"description":      "Multivoice chorus from the CAPS package",
+		   	"plugin_type":      "LADSPA",
+		   	"plugin_file":      "caps.so",
+		   	"plugin_program":   "ChorusII"
+		}
+		
 	],
 
 	"other_effects": [

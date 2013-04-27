@@ -574,7 +574,7 @@ TErrors SalsaStream::connect( llaOutputStream* output, llaAudioPipe& buffer) {
 			}
 		}
 
-		frames = snd_pcm_avail(pcm_);
+		frames = snd_pcm_avail_update(pcm_);
 		if(frames < 0) {
 			LOGGER().error(E_READ_STREAM, snd_strerror(err));
 			snd_pcm_sw_params_free(sw_config_);

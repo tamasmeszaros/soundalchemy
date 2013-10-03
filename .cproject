@@ -68,7 +68,7 @@
 						</toolChain>
 					</folderInfo>
 					<sourceEntries>
-						<entry excluding="external/include|external/lib|external/share|src/lib/salsa-lib|code|src/llaudio/drivers/tinyalsa|src/jni_main.cpp|src/lib/jsoncpp|jni" flags="VALUE_WORKSPACE_PATH|RESOLVED" kind="sourcePath" name=""/>
+						<entry excluding="external/code/jsoncpp-src-0.6.0-rc2|external/code/salsa-lib-0.1.3|external/include|external/lib|external/share|src/lib/salsa-lib|code|src/llaudio/drivers/tinyalsa|src/jni_main.cpp|src/lib/jsoncpp|jni" flags="VALUE_WORKSPACE_PATH|RESOLVED" kind="sourcePath" name=""/>
 					</sourceEntries>
 				</configuration>
 			</storageModule>
@@ -98,7 +98,8 @@
 								<option id="gnu.cpp.compiler.exe.release.option.debugging.level.1728005397" name="Debug Level" superClass="gnu.cpp.compiler.exe.release.option.debugging.level" value="gnu.cpp.compiler.debugging.level.none" valueType="enumerated"/>
 								<option id="gnu.cpp.compiler.option.other.other.708730523" name="Other flags" superClass="gnu.cpp.compiler.option.other.other" value="-c -fmessage-length=0 -ffast-math" valueType="string"/>
 								<option id="gnu.cpp.compiler.option.include.paths.609901248" name="Include paths (-I)" superClass="gnu.cpp.compiler.option.include.paths" valueType="includePath">
-									<listOptionValue builtIn="false" value="&quot;${workspace_loc:/soundalchemy/external/include}&quot;"/>
+									<listOptionValue builtIn="false" value="../external/include"/>
+									<listOptionValue builtIn="false" value="../external/include/ladspa"/>
 								</option>
 								<inputType id="cdt.managedbuild.tool.gnu.cpp.compiler.input.1541626692" superClass="cdt.managedbuild.tool.gnu.cpp.compiler.input"/>
 							</tool>
@@ -107,7 +108,7 @@
 								<option id="gnu.c.compiler.exe.release.option.debugging.level.102025896" name="Debug Level" superClass="gnu.c.compiler.exe.release.option.debugging.level" value="gnu.c.debugging.level.none" valueType="enumerated"/>
 								<option id="gnu.c.compiler.option.misc.other.359917257" name="Other flags" superClass="gnu.c.compiler.option.misc.other" value="-c -fmessage-length=0 -ffast-math" valueType="string"/>
 								<option id="gnu.c.compiler.option.include.paths.1280740445" name="Include paths (-I)" superClass="gnu.c.compiler.option.include.paths" valueType="includePath">
-									<listOptionValue builtIn="false" value="&quot;${workspace_loc:/soundalchemy/external/include}&quot;"/>
+									<listOptionValue builtIn="false" value="../../external/include"/>
 								</option>
 								<option id="gnu.c.compiler.option.preprocessor.def.symbols.1473976138" name="Defined symbols (-D)" superClass="gnu.c.compiler.option.preprocessor.def.symbols" valueType="definedSymbols">
 									<listOptionValue builtIn="false" value="DEBUG_LLAUDIO"/>
@@ -117,15 +118,17 @@
 							<tool id="cdt.managedbuild.tool.gnu.c.linker.exe.release.1708297999" name="GCC C Linker" superClass="cdt.managedbuild.tool.gnu.c.linker.exe.release"/>
 							<tool id="cdt.managedbuild.tool.gnu.cpp.linker.exe.release.63255700" name="GCC C++ Linker" superClass="cdt.managedbuild.tool.gnu.cpp.linker.exe.release">
 								<option id="gnu.cpp.link.option.paths.1087430889" name="Library search path (-L)" superClass="gnu.cpp.link.option.paths" valueType="libPaths">
-									<listOptionValue builtIn="false" value="&quot;${workspace_loc:/soundalchemy/external/lib/x86_linux}&quot;"/>
+									<listOptionValue builtIn="false" value="../external/lib/x86_linux"/>
 								</option>
 								<option id="gnu.cpp.link.option.libs.766634425" name="Libraries (-l)" superClass="gnu.cpp.link.option.libs" valueType="libs">
 									<listOptionValue builtIn="false" value="m"/>
 									<listOptionValue builtIn="false" value="jsoncpp"/>
 									<listOptionValue builtIn="false" value="pthread"/>
-									<listOptionValue builtIn="false" value="asound"/>
 									<listOptionValue builtIn="false" value="dl"/>
+									<listOptionValue builtIn="false" value="salsa"/>
 								</option>
+								<option id="gnu.cpp.link.option.userobjs.948660214" name="Other objects" superClass="gnu.cpp.link.option.userobjs"/>
+								<option id="gnu.cpp.link.option.flags.1415406243" name="Linker flags" superClass="gnu.cpp.link.option.flags" value="" valueType="string"/>
 								<inputType id="cdt.managedbuild.tool.gnu.cpp.linker.input.239228003" superClass="cdt.managedbuild.tool.gnu.cpp.linker.input">
 									<additionalInput kind="additionalinputdependency" paths="$(USER_OBJS)"/>
 									<additionalInput kind="additionalinput" paths="$(LIBS)"/>
@@ -137,7 +140,7 @@
 						</toolChain>
 					</folderInfo>
 					<sourceEntries>
-						<entry excluding="external/lib|external/share|external/include|code|src/lib/salsa-lib|src/llaudio/drivers/tinyalsa|src/jni_main.cpp|src/lib/jsoncpp|jni" flags="VALUE_WORKSPACE_PATH|RESOLVED" kind="sourcePath" name=""/>
+						<entry excluding="external/code/jsoncpp-src-0.6.0-rc2|external/code/salsa-lib-0.1.3|external/lib|external/share|external/include|code|src/lib/salsa-lib|src/llaudio/drivers/tinyalsa|src/jni_main.cpp|src/lib/jsoncpp|jni" flags="VALUE_WORKSPACE_PATH|RESOLVED" kind="sourcePath" name=""/>
 					</sourceEntries>
 				</configuration>
 			</storageModule>
@@ -170,7 +173,7 @@
 									<listOptionValue builtIn="false" value="ANDROID"/>
 								</option>
 								<option id="gnu.c.compiler.option.include.paths.677621055" name="Include paths (-I)" superClass="gnu.c.compiler.option.include.paths" valueType="includePath">
-									<listOptionValue builtIn="false" value="&quot;${workspace_loc:/soundalchemy/external/include}&quot;"/>
+									<listOptionValue builtIn="false" value="../external/include"/>
 								</option>
 								<option id="gnu.c.compiler.option.optimization.flags.474619434" name="Other optimization flags" superClass="gnu.c.compiler.option.optimization.flags" value="-ffast-math" valueType="string"/>
 								<inputType id="cdt.managedbuild.tool.gnu.c.compiler.input.1806218457" superClass="cdt.managedbuild.tool.gnu.c.compiler.input"/>
@@ -182,7 +185,7 @@
 									<listOptionValue builtIn="false" value="ANDROID"/>
 								</option>
 								<option id="gnu.cpp.compiler.option.include.paths.1339909803" name="Include paths (-I)" superClass="gnu.cpp.compiler.option.include.paths" valueType="includePath">
-									<listOptionValue builtIn="false" value="&quot;${workspace_loc:/soundalchemy/external/include}&quot;"/>
+									<listOptionValue builtIn="false" value="../external/include"/>
 								</option>
 								<option id="gnu.cpp.compiler.option.other.other.867455119" name="Other flags" superClass="gnu.cpp.compiler.option.other.other" value="-c -fmessage-length=0 " valueType="string"/>
 								<option id="gnu.cpp.compiler.option.optimization.flags.1695552107" name="Other optimization flags" superClass="gnu.cpp.compiler.option.optimization.flags" value="-ffast-math" valueType="string"/>
@@ -191,7 +194,7 @@
 							<tool id="cdt.managedbuild.tool.gnu.cross.c.linker.2025598227" name="Cross GCC Linker" superClass="cdt.managedbuild.tool.gnu.cross.c.linker"/>
 							<tool command="g++" commandLinePattern="${COMMAND} ${FLAGS} ${OUTPUT_FLAG} ${OUTPUT_PREFIX}${OUTPUT} ${INPUTS}" errorParsers="org.eclipse.cdt.core.GLDErrorParser" id="cdt.managedbuild.tool.gnu.cross.cpp.linker.671634637" name="Cross G++ Linker" superClass="cdt.managedbuild.tool.gnu.cross.cpp.linker">
 								<option id="gnu.cpp.link.option.paths.2040475047" name="Library search path (-L)" superClass="gnu.cpp.link.option.paths" valueType="libPaths">
-									<listOptionValue builtIn="false" value="&quot;${workspace_loc:/soundalchemy/external/lib/arm_androideabi}&quot;"/>
+									<listOptionValue builtIn="false" value="../external/lib/arm_androideabi"/>
 								</option>
 								<option id="gnu.cpp.link.option.libs.89000885" name="Libraries (-l)" superClass="gnu.cpp.link.option.libs" valueType="libs">
 									<listOptionValue builtIn="false" value="salsa"/>
@@ -212,7 +215,7 @@
 						</toolChain>
 					</folderInfo>
 					<sourceEntries>
-						<entry excluding="external/include|external/share|external/lib|code|src/llaudio/drivers/tinyalsa|src/jni_main.cpp" flags="VALUE_WORKSPACE_PATH|RESOLVED" kind="sourcePath" name=""/>
+						<entry excluding="external/code/jsoncpp-src-0.6.0-rc2|external/code/salsa-lib-0.1.3|external/include|external/share|external/lib|code|src/llaudio/drivers/tinyalsa|src/jni_main.cpp" flags="VALUE_WORKSPACE_PATH|RESOLVED" kind="sourcePath" name=""/>
 					</sourceEntries>
 				</configuration>
 			</storageModule>
@@ -291,7 +294,7 @@
 						</toolChain>
 					</folderInfo>
 					<sourceEntries>
-						<entry excluding="src/thread.cpp|src/soundeffect.cpp|src/message.cpp|src/ladspaeffect.cpp|src/effectdatabase.cpp|src/clientconnector.cpp|src/androidconnector.cpp|src/dspserver.cpp|external/include|external/lib|external/share|src/lib/salsa-lib|code|src/llaudio/drivers/tinyalsa|src/jni_main.cpp|src/lib/jsoncpp|jni" flags="VALUE_WORKSPACE_PATH|RESOLVED" kind="sourcePath" name=""/>
+						<entry excluding="external/code/jsoncpp-src-0.6.0-rc2|external/code/salsa-lib-0.1.3|src/thread.cpp|src/soundeffect.cpp|src/message.cpp|src/ladspaeffect.cpp|src/effectdatabase.cpp|src/clientconnector.cpp|src/androidconnector.cpp|src/dspserver.cpp|external/include|external/lib|external/share|src/lib/salsa-lib|code|src/llaudio/drivers/tinyalsa|src/jni_main.cpp|src/lib/jsoncpp|jni" flags="VALUE_WORKSPACE_PATH|RESOLVED" kind="sourcePath" name=""/>
 					</sourceEntries>
 				</configuration>
 			</storageModule>
@@ -367,7 +370,7 @@
 						</toolChain>
 					</folderInfo>
 					<sourceEntries>
-						<entry excluding="src/thread.cpp|src/soundeffect.cpp|src/message.cpp|src/ladspaeffect.cpp|src/effectdatabase.cpp|src/dspserver.cpp|src/clientconnector.cpp|src/androidconnector.cpp|external/include|external/share|external/lib|code|src/llaudio/drivers/tinyalsa|src/jni_main.cpp" flags="VALUE_WORKSPACE_PATH|RESOLVED" kind="sourcePath" name=""/>
+						<entry excluding="external/code/jsoncpp-src-0.6.0-rc2|external/code/salsa-lib-0.1.3|src/thread.cpp|src/soundeffect.cpp|src/message.cpp|src/ladspaeffect.cpp|src/effectdatabase.cpp|src/dspserver.cpp|src/clientconnector.cpp|src/androidconnector.cpp|external/include|external/share|external/lib|code|src/llaudio/drivers/tinyalsa|src/jni_main.cpp" flags="VALUE_WORKSPACE_PATH|RESOLVED" kind="sourcePath" name=""/>
 					</sourceEntries>
 				</configuration>
 			</storageModule>

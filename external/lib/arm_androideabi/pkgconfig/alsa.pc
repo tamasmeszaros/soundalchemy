@@ -1,0 +1,11 @@
+prefix=/home/quarky/Workspace/soundalchemy/external
+exec_prefix=${prefix}
+libdir=${exec_prefix}/lib
+includedir=${prefix}/include
+
+Name: alsa
+Description: Small Advanced Linux Sound Architecture (SALSA) - Library
+Version: 1.0.25
+Requires: 
+Libs: -L${libdir} -lsalsa
+Cflags: -I${includedir}

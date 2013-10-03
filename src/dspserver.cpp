@@ -1,17 +1,13 @@
 /*
- * dspserver.cpp
- * 
  * Copyright (c) 2013 Mészáros Tamás.
  * All rights reserved. This program and the accompanying materials
- * are made available under the terms of the GNU Public License v3.0
+ * are made available under the terms of the GNU Public License v2.0
  * which accompanies this distribution, and is available at
- * http://www.gnu.org/licenses/gpl.html
+ * http://www.gnu.org/licenses/old-licenses/gpl-2.0.html
  * 
  * Contributors:
  *     Mészáros Tamás - initial API and implementation
  */
-
-
 #include <cstdarg>
 #include <unistd.h>
 #include <string>
@@ -245,7 +241,7 @@ void DspServer::setBufferSize(TSize buffer_size) {
 void DspServer::setSampleRate(TSampleRate sample_rate) {
 }
 
-void DspServer::addEffect(SoundEffect* effect) {
+void DspServer::addEffect(std::string effect_name) {
 }
 
 void DspServer::broadcastMessage(OutboundMessage& message) {
@@ -439,23 +435,30 @@ DspServer::EffectChain::EffectChain() :
 		sample_rate_(SR_CD_QUALITY_44100), bypassed_(false)
 		 {
 
-
+	// set up the inputs of the output node
 	output_.setInputsCount(input_.getOutputsCount());
 
+	// This is a temporary place for inserting audio effects from the database.
+	// Normally it would be done with the UI but adding affects is not
+	// implemented yet. The function addEffect()
+
+	// TODO adding effects is done with the UI
 	SoundEffect *e[] = {
 
-			database_->getEffect("multi_chorus", sample_rate_),
+//
 //			database_->getEffect("caps_amp", sample_rate_),
 //			database_->getEffect("caps_cabinet", sample_rate_),
+			database_->getEffect("mono_phaser", sample_rate_),
 			database_->getEffect("plate_reverb", sample_rate_),
+
 
 	};
 
-//	e[1]->getParam("tonestack")->setValue(7.0f);
-//	e[1]->getParam("gain")->setValue(0.60f);
-//	e[1]->getParam("treble")->setValue(1.0f);
-//	e[1]->getParam("mid")->setValue(0.5f);
-//	e[2]->getParam("model")->setValue(9.0f);
+//	e[0]->getParam("tonestack")->setValue(7.0f);
+//	e[0]->getParam("gain")->setValue(0.60f);
+//	e[0]->getParam("treble")->setValue(1.0f);
+//	e[0]->getParam("mid")->setValue(0.5f);
+//	e[1]->getParam("model")->setValue(9.0f);
 
 	addEffect(e[0],-1);
 	addEffect(e[1],-1);

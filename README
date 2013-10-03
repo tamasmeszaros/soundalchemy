@@ -1,0 +1,8 @@
+DIRECTORIES
+-----------
+
+./src		C++ Source and header files
+./Android	Android ARM binaries and makefile for building the code
+./Linux		Linux binaries and makefile
+./doc		Doxygen generated class reference
+./external	External libraries and source files which are used in the work.

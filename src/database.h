@@ -1,3 +1,13 @@
+/*
+ * Copyright (c) 2013 Mészáros Tamás.
+ * All rights reserved. This program and the accompanying materials
+ * are made available under the terms of the GNU Public License v2.0
+ * which accompanies this distribution, and is available at
+ * http://www.gnu.org/licenses/old-licenses/gpl-2.0.html
+ * 
+ * Contributors:
+ *     Mészáros Tamás - initial API and implementation
+ */
 unsigned char effects_json[] = {
   0x7b, 0x0a, 0x09, 0x22, 0x61, 0x6d, 0x70, 0x5f, 0x6d, 0x6f, 0x64, 0x65,
   0x6c, 0x73, 0x22, 0x3a, 0x20, 0x5b, 0x0a, 0x09, 0x09, 0x7b, 0x20, 0x09,
